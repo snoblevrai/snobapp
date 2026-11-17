@@ -64,6 +64,20 @@ if CommandLine.arguments.contains("--daemon") {
     BatteryDaemon.shared.run()
 }
 
+// `snobapp --live-fullcharge` : essai réel du mode charge complète par le même chemin que le menu.
+if CommandLine.arguments.contains("--live-fullcharge") {
+    func state() -> String { "limite \(CSNativeLimitGet()) % \(CSNativeLimitEnabled() ? "active" : "levée")" }
+    BatteryController.shared.start()
+    print("avant : \(state())")
+    Settings.shared.set(true, for: Key.fullChargeMode); BatteryController.shared.evaluateModes()
+    RunLoop.main.run(until: Date().addingTimeInterval(3))
+    print("cochée : \(state()), mode \(Settings.shared.snapshot.fullChargeMode ? "actif" : "inactif"), \(BatteryController.shared.summary)")
+    Settings.shared.set(false, for: Key.fullChargeMode); BatteryController.shared.evaluateModes()
+    RunLoop.main.run(until: Date().addingTimeInterval(2))
+    print("décochée : \(state())")
+    exit(0)
+}
+
 // `snobapp --bench` : coût processeur de chaque chemin chaud (sans rien afficher ni défiler).
 if CommandLine.arguments.contains("--bench") {
     func cpu() -> Double {
@@ -148,6 +162,35 @@ if CommandLine.arguments.contains("--selftest") {
             if !ok { failures += 1 }
             print("  \(ok ? "✓" : "✗") \(name)\(c.dischargeRequest != 0 ? " [décharge finie: \(r.dischargeFinished == 1)]" : "")")
         }
+        // Modes du menu (v7.5) : charge complète et décharge.
+        typealias M = BatteryModes.State
+        let modeCases: [(String, [(Int, Bool, Bool)], M, M)] = [
+            // (nom, étapes (%, secteur, pleine), départ, attendu)
+            ("charge complète cochée sur secteur → reste cochée pendant la charge",
+             [(82, true, false), (90, true, false)], M(fullCharge: true), M(fullCharge: true, sawAC: true)),
+            ("charge complète → se décoche batterie pleine",
+             [(95, true, false), (100, true, true)], M(fullCharge: true), M()),
+            ("charge complète → se décoche au débranchement",
+             [(85, true, false), (86, false, false)], M(fullCharge: true), M()),
+            ("charge complète cochée débranché → attend le branchement",
+             [(70, false, false), (69, false, false)], M(fullCharge: true), M(fullCharge: true)),
+            ("… puis branchement → charge, débranchement → se décoche",
+             [(69, false, false), (70, true, false), (75, false, false)], M(fullCharge: true), M()),
+            ("décharge vers 80 → se décoche à 80 sur secteur",
+             [(90, true, false), (80, true, false)], M(discharge: true), M()),
+            ("décharge vers 80, débranché → se décoche aussi en passant sous 80",
+             [(85, false, false), (79, false, false)], M(discharge: true), M()),
+            ("décharge en cours au-dessus de la limite → reste cochée",
+             [(90, true, false), (86, true, false)], M(discharge: true), M(discharge: true)),
+        ]
+        for (name, steps, start, expected) in modeCases {
+            var st = start
+            for (pct, ac, full) in steps { st = BatteryModes.next(st, percent: pct, onAC: ac, charged: full, limit: 80) }
+            let ok = st == expected
+            if !ok { failures += 1 }
+            print("  \(ok ? "✓" : "✗") \(name)")
+        }
+
         // Tap à 3 doigts reconstitué à partir des seules transitions (v6.1).
         var tapSettings = Settings.shared.snapshot
         tapSettings.middleClickEnabled = true; tapSettings.tapToClick = true

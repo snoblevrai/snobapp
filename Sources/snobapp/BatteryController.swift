@@ -67,11 +67,15 @@ final class BatteryController {
         ) { _ in BatteryController.shared.scheduleNativeRecheck(after: 5) }
         // Branchement / débranchement du chargeur : c'est là que la charge reprend.
         if let src = IOPSNotificationCreateRunLoopSource({ _ in
+            BatteryController.shared.evaluateModes()          // branchement, niveau : modes aussitôt
             BatteryController.shared.scheduleNativeRecheck(after: 2)
         }, nil)?.takeRetainedValue() {
             CFRunLoopAddSource(CFRunLoopGetMain(), src, .defaultMode)
         }
-        let timer = Timer(timeInterval: 60, repeats: true) { _ in BatteryController.shared.enforceNativeLimit() }
+        let timer = Timer(timeInterval: 60, repeats: true) { _ in
+            BatteryController.shared.evaluateModes()
+            BatteryController.shared.enforceNativeLimit()
+        }
         timer.tolerance = 15   // permet à macOS de regrouper ce réveil avec d'autres
         RunLoop.main.add(timer, forMode: .common)
     }
@@ -90,7 +94,7 @@ final class BatteryController {
     func enforceNativeLimit() -> Bool {
         let s = Settings.shared.snapshot
         let cap = nativeCap(for: s.batteryLimit)
-        guard nativeSupported, s.batteryLimitEnabled, cap < 100 else { return false }
+        guard nativeSupported, s.batteryLimitEnabled, cap < 100, !s.fullChargeMode else { return false }
         let current = CSNativeLimitGet(), enabled = CSNativeLimitEnabled()
         guard current != cap || !enabled else { return false }
         if current != cap { _ = CSNativeLimitSet(Int32(cap)) }
@@ -126,7 +130,8 @@ final class BatteryController {
         //    elle doit rester active app fermée, Mac en veille ou service arrêté.
         // v6 : on n'interroge PowerUI (appels XPC vers powerd) que si la cible a changé,
         // et non à chaque modification d'un réglage quelconque.
-        let nativeTarget = (enabled: s.batteryLimitEnabled && cap < 100, cap: cap)
+        // Charge complète (v7.5) : limite native levée le temps de charger à 100 %.
+        let nativeTarget = (enabled: s.batteryLimitEnabled && cap < 100 && !s.fullChargeMode, cap: cap)
         if nativeSupported, lastNativeTarget.map({ $0 != nativeTarget }) ?? true {
             if nativeTarget.enabled {
                 if CSNativeLimitGet() != cap { _ = CSNativeLimitSet(Int32(cap)) }
@@ -160,7 +165,50 @@ final class BatteryController {
            st.dischargeFinished != 0, st.dischargeFinished == Settings.shared.dischargeRequestID {
             Settings.shared.set(false, for: Key.dischargeMode)
         }
+        evaluateModes()
         onStatusChange.forEach { $0() }
+    }
+
+    // MARK: - Charge complète / décharge (v7.5)
+
+    private var modes = BatteryModes.State()
+
+    /// Fait évoluer les deux modes du menu selon l'état réel de la batterie.
+    func evaluateModes() {
+        let s = Settings.shared.snapshot
+        let b = Self.readPower()
+        // Adaptateur coupé par notre décharge : macOS annonce « sur batterie » alors que le
+        // chargeur est branché — ce n'est pas un débranchement.
+        let cutByUs = helperAlive && status?.adapterInhibited == true
+        modes.fullCharge = s.fullChargeMode
+        modes.discharge = s.dischargeMode
+        let n = BatteryModes.next(modes, percent: b.percent, onAC: b.onAC || cutByUs,
+                                  charged: b.charged, limit: s.batteryLimit)
+        modes = n
+        if n.fullCharge != s.fullChargeMode {
+            NSLog("snobapp: charge complète terminée (\(b.percent) %, \(b.onAC ? "batterie pleine" : "chargeur débranché"))")
+            Settings.shared.set(n.fullCharge, for: Key.fullChargeMode)
+        }
+        if n.discharge != s.dischargeMode {
+            NSLog("snobapp: décharge terminée (\(b.percent) % ≤ \(s.batteryLimit) %)")
+            Settings.shared.set(n.discharge, for: Key.dischargeMode)
+        }
+    }
+
+    /// État d'alimentation, dont « batterie pleine » selon macOS.
+    static func readPower() -> (percent: Int, onAC: Bool, charging: Bool, charged: Bool) {
+        let base = BatteryDaemon.readBattery()
+        var charged = false
+        if let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+           let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] {
+            for ps in list {
+                if let d = IOPSGetPowerSourceDescription(info, ps)?.takeUnretainedValue() as? [String: Any],
+                   (d[kIOPSTypeKey] as? String) == kIOPSInternalBatteryType {
+                    charged = d[kIOPSIsChargedKey] as? Bool ?? false
+                }
+            }
+        }
+        return (base.percent, base.onAC, base.charging, charged)
     }
 
     /// Résumé d'une ligne pour le menu.
@@ -168,7 +216,10 @@ final class BatteryController {
         let s = Settings.shared.snapshot
         let battery = BatteryDaemon.readBattery()
         var parts = ["\(battery.percent) %"]
-        if helperAlive, status?.adapterInhibited == true {
+        if s.fullChargeMode {
+            parts.append(battery.onAC ? (battery.charging ? "charge complète en cours" : "charge complète")
+                                      : "charge complète au prochain branchement")
+        } else if helperAlive, status?.adapterInhibited == true {
             parts.append(s.dischargeMode ? "décharge en cours" : "sur batterie (limite)")
         } else if battery.onAC {
             parts.append(battery.charging ? "en charge" : "charge en pause")

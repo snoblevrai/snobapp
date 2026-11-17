@@ -61,6 +61,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         discharge.state = s.dischargeMode ? .on : .off
         if !s.batteryLimitEnabled { discharge.action = nil }
         menu.addItem(discharge)
+        let full = action("Charger complètement (100 %)", #selector(toggleFullCharge))
+        full.state = s.fullChargeMode ? .on : .off
+        if !s.batteryLimitEnabled { full.action = nil }
+        menu.addItem(full)
 
         menu.addItem(.separator())
         let login = action("Ouvrir au démarrage", #selector(toggleLogin))
@@ -144,7 +148,17 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             NSApp.activate(ignoringOtherApps: true)
             guard alert.runModal() == .alertFirstButtonReturn, HelperInstaller.install() else { return }
         }
+        if on { Settings.shared.set(false, for: Key.fullChargeMode) }   // les deux s'excluent
         Settings.shared.set(on, for: Key.dischargeMode)
+        BatteryController.shared.evaluateModes()
+    }
+
+    /// v7.5 : lève la limite jusqu'à batterie pleine ; se décoche seule (pleine ou débranché).
+    @objc private func toggleFullCharge() {
+        let on = !Settings.shared.snapshot.fullChargeMode
+        if on { Settings.shared.set(false, for: Key.dischargeMode) }
+        Settings.shared.set(on, for: Key.fullChargeMode)
+        BatteryController.shared.evaluateModes()
     }
 
     @objc private func toggleLogin() { LoginItem.set(!LoginItem.isEnabled) }

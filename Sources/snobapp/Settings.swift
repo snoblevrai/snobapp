@@ -20,6 +20,7 @@ enum Key {
     static let batteryLimit = "batteryLimit"
     static let dischargeMode = "dischargeMode"
     static let dischargeRequestID = "dischargeRequestID"
+    static let fullChargeMode = "fullChargeMode"            // v7.5
     static let didImportV3Settings = "didImportV3Settings"
     // v5
     static let smoothScrollEnabled = "smoothScrollEnabled"
@@ -45,6 +46,7 @@ struct SettingsSnapshot {
     var batteryLimitEnabled: Bool
     var batteryLimit: Int
     var dischargeMode: Bool
+    var fullChargeMode: Bool
     var smoothScrollEnabled: Bool
     var smoothness: Double
     var scrollSpeed: Double
@@ -72,6 +74,7 @@ final class Settings {
         Key.batteryLimitEnabled: true,
         Key.batteryLimit: 80,
         Key.dischargeMode: false,
+        Key.fullChargeMode: false,
         Key.smoothScrollEnabled: true,
         Key.smoothness: 0.4,
         Key.scrollSpeed: 1.0,
@@ -125,6 +128,7 @@ final class Settings {
             batteryLimitEnabled: d.bool(forKey: Key.batteryLimitEnabled),
             batteryLimit: max(20, min(100, d.integer(forKey: Key.batteryLimit))),
             dischargeMode: d.bool(forKey: Key.dischargeMode),
+            fullChargeMode: d.bool(forKey: Key.fullChargeMode),
             smoothScrollEnabled: d.bool(forKey: Key.smoothScrollEnabled),
             smoothness: d.double(forKey: Key.smoothness),
             scrollSpeed: d.double(forKey: Key.scrollSpeed)
@@ -133,7 +137,11 @@ final class Settings {
 
     // MARK: - Accès pratiques
 
-    func set(_ value: Any, for key: String) { defaults.set(value, forKey: key) }
+    /// Écrit et met l'instantané à jour aussitôt (sans attendre la notification de UserDefaults).
+    func set(_ value: Any, for key: String) {
+        defaults.set(value, forKey: key)
+        if Thread.isMainThread { reload() }
+    }
     func bool(_ key: String) -> Bool { defaults.bool(forKey: key) }
 
     var dischargeRequestID: Double { defaults.double(forKey: Key.dischargeRequestID) }

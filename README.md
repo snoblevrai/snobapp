@@ -13,7 +13,7 @@
 | **Clic du milieu au trackpad** | cliquer avec 3 doigts (réglable) = clic du milieu ; taper avec 3 doigts aussi. Apps ignorables. |
 | **Molette de la souris** | inversion verticale / horizontale, **vitesse réglable** (0,5× à 3×), **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS) et **défilement fluide** avec réglage de douceur. Le trackpad et la Magic Mouse ne sont jamais touchés ; sans souris externe branchée, la molette n'est pas du tout interceptée. |
 | **Veille capot fermé** | fermer le capot met le Mac en veille, même avec des écrans externes branchés. |
-| **Limite de charge** | recharge max. (80–95 %, tenue par macOS sur secteur, rétablie automatiquement) et **mode décharge** dans le menu. |
+| **Limite de charge** | recharge max. (80–95 %, tenue par macOS sur secteur, rétablie automatiquement) **mode décharge** et **charge complète** dans le menu (se décochent seuls). |
 
 ## Installation
 
@@ -27,6 +27,7 @@
 - **Limite native de macOS** (macOS 26.4+, paliers 80 / 85 / 90 / 95 %) : arrivé à la limite, macOS arrête la charge et le Mac fonctionne **sur secteur, sans solliciter la batterie** — même app fermée ou en veille.
 - **Surveillance** : la limite peut être désactivée ou relevée par d'autres (redémarrage, autre app, « charger complètement »). snobapp la vérifie au lancement, au branchement du chargeur, au réveil et toutes les 60 s, et la rétablit aussitôt. Il ne la remet jamais à 100 % en quittant.
 - **Pas de limite sous 80 %** : sur les Mac récents (macOS 27), les clés SMC d'arrêt de charge (`CHTE`, `CH0B`/`CH0C`) n'existent plus ; seule la coupure de l'adaptateur (`CHIE`) reste, ce qui obligerait à alterner décharge et recharge (micro-cycles). snobapp ne propose donc que les paliers natifs.
+- **Charge complète** (menu) : lève la limite jusqu'à batterie pleine ; se décoche seule une fois la batterie pleine ou le chargeur débranché. Cochée chargeur débranché, elle vaut pour le prochain branchement.
 - **Mode décharge** (menu) : un petit service root coupe l'adaptateur jusqu'à la limite, puis la limite native prend le relais. Avant chaque veille et à l'arrêt, l'adaptateur est rebranché.
 
 Le service : `/Library/PrivilegedHelperTools/io.github.snoblevrai.snobapp.helper` + `/Library/LaunchDaemons/io.github.snoblevrai.snobapp.helper.plist`, échanges via `/Library/Application Support/snobapp/`. Installation / désinstallation depuis Réglages › Batterie.
