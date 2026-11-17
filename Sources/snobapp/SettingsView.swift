@@ -174,14 +174,11 @@ struct SettingsView: View {
             }
             Section("Batterie") {
                 Toggle("Limiter la recharge", isOn: $batteryLimitEnabled)
-                LabeledContent("Recharge max.") {
-                    HStack {
-                        Slider(value: Binding(get: { Double(batteryLimit) },
-                                              set: { batteryLimit = Int($0.rounded()) }),
-                               in: 20...100, step: 5)
-                        Text("\(batteryLimit) %").monospacedDigit().frame(width: 44, alignment: .trailing)
-                    }
+                // v7.4 : seulement les paliers que macOS tient sur secteur, sans yoyo.
+                Picker("Recharge max.", selection: $batteryLimit) {
+                    ForEach(BatteryController.shared.selectableLimits, id: \.self) { Text("\($0) %").tag($0) }
                 }
+                .pickerStyle(.segmented)
                 .disabled(!batteryLimitEnabled)
                 Text(batteryExplanation).font(.caption).foregroundStyle(.secondary)
                 if batteryLimitEnabled && (BatteryController.shared.needsHelper(Settings.shared.snapshot) || HelperInstaller.isInstalled) {
@@ -254,14 +251,10 @@ struct SettingsView: View {
     }
 
     private var batteryExplanation: String {
-        let cap = BatteryController.shared.nativeCap(for: batteryLimit)
         if !BatteryController.shared.nativeSupported {
             return "La limite est tenue par le service snobapp (coupure de l'adaptateur au-delà)."
         }
-        if batteryLimit >= cap {
-            return "Appliquée par macOS lui-même : fiable même app fermée ou Mac en veille."
-        }
-        return "macOS bloque la charge à \(cap) % (son minimum) ; le service snobapp décharge ensuite jusqu'à \(batteryLimit) %. Pendant la veille, la batterie ne dépasse jamais \(cap) %."
+        return "Appliquée par macOS lui-même : arrivé à la limite, le Mac fonctionne sur secteur sans solliciter la batterie, même app fermée ou en veille. snobapp la rétablit aussitôt si elle est modifiée ou désactivée (redémarrage, autre app). Le service batterie ne sert qu'au mode décharge."
     }
 
     private var helperStatus: (text: String, icon: String, ok: Bool) {

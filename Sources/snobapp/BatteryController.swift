@@ -1,4 +1,6 @@
 import AppKit
+import notify
+import IOKit.ps
 import CSMC
 
 /// Côté app (utilisateur) de la limite de charge :
@@ -22,10 +24,79 @@ final class BatteryController {
         var buf = [Int32](repeating: 0, count: 16)
         let n = CSNativeLimitAvailable(&buf, 16)
         nativeSteps = buf.prefix(Int(n)).map(Int.init).sorted()
+        migrateToNativeStep()
         apply()
         Settings.shared.onChange.append { BatteryController.shared.apply() }
+        startNativeWatchdog()
         Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in BatteryController.shared.refreshStatus() }
         refreshStatus()
+    }
+
+    /// Paliers proposés dans les réglages (v7.4) : seulement ceux que macOS tient sur secteur,
+    /// sans solliciter la batterie (sous 80 %, il faudrait alterner décharge et recharge).
+    var selectableLimits: [Int] {
+        nativeSupported ? nativeSteps.filter { $0 < 100 } : Array(stride(from: 20, through: 95, by: 5))
+    }
+
+    /// v7.4 : une limite hors paliers (ex. 75 %) est remontée au palier natif suivant (80 %).
+    private func migrateToNativeStep() {
+        let limit = Settings.shared.snapshot.batteryLimit
+        guard nativeSupported, !nativeSteps.isEmpty, !nativeSteps.contains(limit) else { return }
+        let step = nativeCap(for: limit)
+        NSLog("snobapp: limite \(limit) % → palier natif \(step) %")
+        Settings.shared.set(step == 100 ? (nativeSteps.first ?? 80) : step, for: Key.batteryLimit)
+    }
+
+    // MARK: - Surveillance de la limite native (v7.4)
+
+    private var watchdogToken: Int32 = 0
+    private var recheckPending = false
+
+    /// La limite native peut être désactivée ou relevée par d'autres (redémarrage, autre app
+    /// comme AlDente qui la remet à 100 %, « Charger complètement » de macOS…).
+    /// macOS ne publie aucune notification quand elle change par l'API système (vérifié : seule
+    /// AlDente poste « com.apple.smartcharging.defaultschanged », elle-même) : on revérifie donc
+    /// toutes les 60 s (2 petites requêtes), au branchement du chargeur, au réveil et au lancement.
+    private func startNativeWatchdog() {
+        guard nativeSupported else { return }
+        notify_register_dispatch("com.apple.smartcharging.defaultschanged", &watchdogToken, .main) { _ in
+            BatteryController.shared.scheduleNativeRecheck()
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { _ in BatteryController.shared.scheduleNativeRecheck(after: 5) }
+        // Branchement / débranchement du chargeur : c'est là que la charge reprend.
+        if let src = IOPSNotificationCreateRunLoopSource({ _ in
+            BatteryController.shared.scheduleNativeRecheck(after: 2)
+        }, nil)?.takeRetainedValue() {
+            CFRunLoopAddSource(CFRunLoopGetMain(), src, .defaultMode)
+        }
+        let timer = Timer(timeInterval: 60, repeats: true) { _ in BatteryController.shared.enforceNativeLimit() }
+        timer.tolerance = 15   // permet à macOS de regrouper ce réveil avec d'autres
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func scheduleNativeRecheck(after delay: TimeInterval = 1) {
+        guard !recheckPending else { return }
+        recheckPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            BatteryController.shared.recheckPending = false
+            BatteryController.shared.enforceNativeLimit()
+        }
+    }
+
+    /// Rétablit la limite native si elle ne correspond plus au réglage. Renvoie true si corrigée.
+    @discardableResult
+    func enforceNativeLimit() -> Bool {
+        let s = Settings.shared.snapshot
+        let cap = nativeCap(for: s.batteryLimit)
+        guard nativeSupported, s.batteryLimitEnabled, cap < 100 else { return false }
+        let current = CSNativeLimitGet(), enabled = CSNativeLimitEnabled()
+        guard current != cap || !enabled else { return false }
+        if current != cap { _ = CSNativeLimitSet(Int32(cap)) }
+        if !CSNativeLimitEnabled() { _ = CSNativeLimitSetEnabled(true) }
+        NSLog("snobapp: limite native rétablie à \(cap) % (trouvée : \(current) %, \(enabled ? "active" : "désactivée"))")
+        return true
     }
 
     /// Palier natif appliqué pour une limite donnée.
