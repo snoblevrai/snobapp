@@ -42,23 +42,45 @@ static void (*pMTDeviceStop)(MTDeviceRef);
 static void (*pMTDeviceRelease)(MTDeviceRef);
 
 static _Atomic(CSTouchFrameHandler) gHandler = NULL;
-static _Atomic int gPositionLimit = 3;
+static _Atomic bool gEnabled = true;
+static _Atomic int gFingers = 3;
+static _Atomic bool gAllowMore = false;
 static CFArrayRef gDevices = NULL;
+
+// État du filtre : uniquement touché par le thread MultitouchSupport.
+static int gLastCount = 0;
+static float gLastX = 0, gLastY = 0;
 
 static int contactCallback(MTDeviceRef device, MTTouch *touches, int count, double timestamp, int frame) {
     (void)device; (void)timestamp; (void)frame;
-    CSTouchFrameHandler handler = atomic_load(&gHandler);
+    if (!atomic_load_explicit(&gEnabled, memory_order_relaxed)) return 0;
+    CSTouchFrameHandler handler = atomic_load_explicit(&gHandler, memory_order_relaxed);
     if (!handler) return 0;
 
-    int limit = atomic_load(&gPositionLimit);
-    int n = count < limit ? count : limit;
+    int fingers = atomic_load_explicit(&gFingers, memory_order_relaxed);
+    bool allowMore = atomic_load_explicit(&gAllowMore, memory_order_relaxed);
+    bool matches = allowMore ? count >= fingers : count == fingers;
+
     float sx = 0, sy = 0;
-    for (int i = 0; i < n; i++) {
-        sx += touches[i].normalized.pos.x;
-        sy += touches[i].normalized.pos.y;
+    if (matches) {
+        for (int i = 0; i < fingers && i < count; i++) {
+            sx += touches[i].normalized.pos.x;
+            sy += touches[i].normalized.pos.y;
+        }
     }
-    handler(count, sx, sy);
+    if (count != gLastCount) {
+        // Transition : on transmet la nouvelle somme et la dernière somme « correspondante ».
+        handler(count, sx, sy, gLastX, gLastY);
+        gLastCount = count;
+    }
+    if (matches) { gLastX = sx; gLastY = sy; }
     return 0;
+}
+
+void CSMultitouchConfigure(bool enabled, int fingers, bool allowMore) {
+    atomic_store(&gFingers, fingers > 0 ? fingers : 1);
+    atomic_store(&gAllowMore, allowMore);
+    atomic_store(&gEnabled, enabled);
 }
 
 bool CSMultitouchLoad(void) {
@@ -79,11 +101,11 @@ bool CSMultitouchLoad(void) {
 
 void CSMultitouchSetHandler(CSTouchFrameHandler handler) { atomic_store(&gHandler, handler); }
 
-void CSMultitouchSetPositionLimit(int limit) { atomic_store(&gPositionLimit, limit > 0 ? limit : 1); }
 
 int CSMultitouchStart(void) {
     if (!CSMultitouchLoad()) return 0;
     CSMultitouchStop();
+    gLastCount = 0;
     gDevices = pMTDeviceCreateList();
     if (!gDevices) return 0;
     CFIndex count = CFArrayGetCount(gDevices);

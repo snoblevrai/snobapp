@@ -20,6 +20,7 @@ final class MiddleClickEngine {
     private var pos2 = SIMD2<Float>.zero
     private var naturalMiddleClickLastTime: CFAbsoluteTime?
     private var frontmostIgnored = false
+    private var lastCount = 0
 
     private init() {}
 
@@ -30,21 +31,28 @@ final class MiddleClickEngine {
             NSLog("snobapp: MultitouchSupport indisponible, clic du milieu au trackpad désactivé")
             return
         }
-        CSMultitouchSetPositionLimit(Int32(Settings.shared.snapshot.fingers))
-        CSMultitouchSetHandler { count, sx, sy in
-            MiddleClickEngine.shared.handleFrame(fingerCount: Int(count), sum: SIMD2(sx, sy))
+        configureFilter()
+        Settings.shared.onChange.append { MiddleClickEngine.shared.configureFilter() }
+        CSMultitouchSetHandler { count, sx, sy, lx, ly in
+            MiddleClickEngine.shared.handleTransition(fingerCount: Int(count), sum: SIMD2(sx, sy), last: SIMD2(lx, ly))
         }
         restartDevices()
     }
 
     /// Relance l'écoute (réveil, nouvel appareil, changement d'écran, changement de réglage).
     func restartDevices() {
-        CSMultitouchSetPositionLimit(Int32(Settings.shared.snapshot.fingers))
+        lock.lock(); lastCount = 0; lock.unlock()
         let n = CSMultitouchStart()
         NSLog("snobapp: \(n) appareil(s) multitouch à l'écoute")
     }
 
     func stop() { CSMultitouchStop() }
+
+    /// Transmet au filtre C les réglages utiles ; désactivé → aucune remontée en Swift.
+    func configureFilter() {
+        let s = Settings.shared.snapshot
+        CSMultitouchConfigure(s.middleClickEnabled, Int32(s.fingers), s.allowMoreFingers)
+    }
 
     /// Mis à jour quand l'app au premier plan change (évite d'interroger NSWorkspace à chaque trame).
     func setFrontmostIgnored(_ ignored: Bool) {
@@ -53,33 +61,42 @@ final class MiddleClickEngine {
 
     // MARK: - Trames tactiles (thread MultitouchSupport)
 
-    private func handleFrame(fingerCount n: Int, sum: SIMD2<Float>) {
-        let s = Settings.shared.snapshot
-        var shouldClick = false
-
-        lock.lock()
-        defer {
-            lock.unlock()
-            if shouldClick { DispatchQueue.main.async { Self.postMiddleClick() } }
+    /// v6.1 : appelé seulement aux changements du nombre de doigts (filtrage en C).
+    /// `last` = dernière somme de positions vue tant que le nombre de doigts correspondait.
+    private func handleTransition(fingerCount n: Int, sum: SIMD2<Float>, last: SIMD2<Float>) {
+        if transition(fingerCount: n, sum: sum, last: last, settings: Settings.shared.snapshot) {
+            DispatchQueue.main.async { Self.postMiddleClick() }
         }
+    }
+
+    /// Cœur de la détection (testé par `--selftest`). Renvoie true s'il faut émettre un clic.
+    func transition(fingerCount n: Int, sum: SIMD2<Float>, last: SIMD2<Float>,
+                    settings s: SettingsSnapshot, now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Bool {
+        var shouldClick = false
+        lock.lock()
+        defer { lock.unlock() }
 
         guard s.middleClickEnabled, !frontmostIgnored else {
             threeDown = false
             touchStartTime = nil
-            return
+            return false
         }
 
         let matches = s.allowMoreFingers ? n >= s.fingers : n == s.fingers
+        let previouslyMatched = s.allowMoreFingers ? lastCount >= s.fingers : lastCount == s.fingers
+        lastCount = n
         threeDown = matches
 
-        guard s.tapToClick else { return }
+        guard s.tapToClick else { return false }
+
+        // Fin d'une phase « N doigts » : position finale des doigts avant leur départ.
+        if previouslyMatched && !matches { pos2 = last }
 
         if n == 0 {
-            shouldClick = touchEnded(s)
-            return
+            shouldClick = touchEnded(s, now: now)
+            return shouldClick
         }
 
-        let now = CFAbsoluteTimeGetCurrent()
         if touchStartTime == nil {
             touchStartTime = now
             maybeMiddleClick = true
@@ -101,13 +118,13 @@ final class MiddleClickEngine {
                 pos2 = sum
             }
         }
+        return shouldClick
     }
 
     /// Tous les doigts levés : décide s'il s'agissait d'un tap N doigts.
-    private func touchEnded(_ s: SettingsSnapshot) -> Bool {
+    private func touchEnded(_ s: SettingsSnapshot, now: CFAbsoluteTime) -> Bool {
         defer { touchStartTime = nil }
         guard let start = touchStartTime, pos1 != .zero else { return false }
-        let now = CFAbsoluteTimeGetCurrent()
         guard now - start <= s.maxTimeDelta else { return false }
         let distance = Swift.abs(pos1.x - pos2.x) + Swift.abs(pos1.y - pos2.y)
         guard distance < s.maxDistanceDelta else { return false }

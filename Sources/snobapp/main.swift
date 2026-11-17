@@ -95,6 +95,32 @@ if CommandLine.arguments.contains("--selftest") {
             if !ok { failures += 1 }
             print("  \(ok ? "✓" : "✗") \(name)\(c.dischargeRequest != 0 ? " [décharge finie: \(r.dischargeFinished == 1)]" : "")")
         }
+        // Tap à 3 doigts reconstitué à partir des seules transitions (v6.1).
+        var tapSettings = Settings.shared.snapshot
+        tapSettings.middleClickEnabled = true; tapSettings.tapToClick = true
+        tapSettings.fingers = 3; tapSettings.allowMoreFingers = false
+        tapSettings.maxTimeDelta = 0.3; tapSettings.maxDistanceDelta = 0.05
+        MiddleClickEngine.shared.setFrontmostIgnored(false)
+        let p = SIMD2<Float>(1.5, 1.2), moved = SIMD2<Float>(1.8, 1.2), z = SIMD2<Float>(0, 0)
+        let tapCases: [(String, [(Int, SIMD2<Float>, SIMD2<Float>, Double)], Bool)] = [
+            ("tap rapide 3 doigts → clic", [(1, z, z, 0), (3, p, z, 0.02), (0, z, p, 0.12)], true),
+            ("3 doigts qui glissent → pas de clic", [(3, p, z, 0), (0, z, moved, 0.15)], false),
+            ("appui long 3 doigts → pas de clic", [(3, p, z, 0), (0, z, p, 0.6)], false),
+            ("4 doigts → pas de clic", [(3, p, z, 0), (4, z, p, 0.03), (0, z, p, 0.1)], false),
+            ("1 doigt (curseur) → pas de clic", [(1, z, z, 0), (0, z, z, 0.1)], false),
+        ]
+        for (name, steps, expected) in tapCases {
+            let t0 = CFAbsoluteTimeGetCurrent() + 1000
+            var clicked = false
+            for (n, sum, last, dt) in steps {
+                clicked = MiddleClickEngine.shared.transition(fingerCount: n, sum: sum, last: last,
+                                                              settings: tapSettings, now: t0 + dt) || clicked
+            }
+            let ok = clicked == expected
+            if !ok { failures += 1 }
+            print("  \(ok ? "✓" : "✗") \(name)")
+        }
+
         // Vitesse : un cran de 10 px à 2× → 20 px, à 0,5× → 5 px (accélération 100 %, sans inversion).
         for (speed, expected) in [(2.0, 20.0), (0.5, 5.0), (1.0, 10.0)] {
             var snap = Settings.shared.snapshot

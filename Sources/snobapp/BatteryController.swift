@@ -24,7 +24,7 @@ final class BatteryController {
         nativeSteps = buf.prefix(Int(n)).map(Int.init).sorted()
         apply()
         Settings.shared.onChange.append { BatteryController.shared.apply() }
-        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in BatteryController.shared.refreshStatus() }
+        Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in BatteryController.shared.refreshStatus() }
         refreshStatus()
     }
 

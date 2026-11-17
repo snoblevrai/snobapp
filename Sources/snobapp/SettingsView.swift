@@ -328,7 +328,10 @@ final class SettingsWindowController {
 
     private let model = SettingsModel()
     private var window: NSWindow?
+    private var closeObserver: NSObjectProtocol?
 
+    /// v6.1 : la fenêtre est entièrement détruite à la fermeture. Avant, elle restait en mémoire
+    /// et sa minuterie redessinait la vue SwiftUI chaque seconde, même fenêtre fermée.
     func show() {
         if window == nil {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
@@ -337,10 +340,22 @@ final class SettingsWindowController {
             w.title = "Réglages snobapp"
             w.isReleasedWhenClosed = false
             w.center()
+            closeObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification, object: w, queue: .main
+            ) { [weak self] _ in self?.teardown() }
             window = w
         }
         model.refresh()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func teardown() {
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+        closeObserver = nil
+        // Libère la vue (et sa minuterie) après la fin de l'animation de fermeture.
+        let w = window
+        window = nil
+        DispatchQueue.main.async { w?.contentView = nil }
     }
 }

@@ -48,7 +48,8 @@ final class EventTap {
             // macOS coupe un tap jugé trop lent : on le réarme immédiatement.
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
         case .scrollWheel:
-            if SmoothScroller.isOurs(event) { break }          // nos évènements lissés
+            // Trackpad / Magic Mouse (~100 évènements/s) et nos évènements lissés : rien à faire.
+            if SmoothScroller.isOurs(event) || MouseScroll.isFromTouchSurface(event) { break }
             let s = Settings.shared.snapshot
             MouseScroll.process(event, settings: s)
             // v5 : molette de souris lissée (le trackpad garde son propre défilement).
