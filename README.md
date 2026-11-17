@@ -4,14 +4,14 @@
 
 <p align="center">Une petite app de barre de menus macOS qui réunit quatre utilitaires en un seul.</p>
 
-> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, acceleration control and smooth scrolling, sleep on lid close even with external displays, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
+> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, speed and acceleration control and smooth scrolling, sleep on lid close even with external displays, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
 
 ## Fonctions
 
 | | |
 |---|---|
 | **Clic du milieu au trackpad** | cliquer avec 3 doigts (réglable) = clic du milieu ; taper avec 3 doigts aussi. Apps ignorables. |
-| **Molette de la souris** | inversion verticale / horizontale, **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS) et **défilement fluide** avec réglage de douceur. Le trackpad et la Magic Mouse ne sont jamais touchés. |
+| **Molette de la souris** | inversion verticale / horizontale, **vitesse réglable** (0,5× à 3×), **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS) et **défilement fluide** avec réglage de douceur. Le trackpad et la Magic Mouse ne sont jamais touchés. |
 | **Veille capot fermé** | fermer le capot met le Mac en veille, même avec des écrans externes branchés. |
 | **Limite de charge** | recharge max. réglable et **mode décharge** dans le menu. |
 

@@ -95,6 +95,19 @@ if CommandLine.arguments.contains("--selftest") {
             if !ok { failures += 1 }
             print("  \(ok ? "✓" : "✗") \(name)\(c.dischargeRequest != 0 ? " [décharge finie: \(r.dischargeFinished == 1)]" : "")")
         }
+        // Vitesse : un cran de 10 px à 2× → 20 px, à 0,5× → 5 px (accélération 100 %, sans inversion).
+        for (speed, expected) in [(2.0, 20.0), (0.5, 5.0), (1.0, 10.0)] {
+            var snap = Settings.shared.snapshot
+            snap.scrollSpeed = speed; snap.reverseEnabled = false; snap.scrollAcceleration = 1
+            let e = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: 1, wheel2: 0, wheel3: 0)!
+            e.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: 10)
+            MouseScroll.process(e, settings: snap)
+            let got = e.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+            let ok = Swift.abs(got - expected) < 0.01
+            if !ok { failures += 1 }
+            print("  \(ok ? "✓" : "✗") vitesse \(speed)× : \(got) px (attendu \(expected))")
+        }
+
         // Défilement fluide : la distance émise doit égaler la distance reçue.
         for smooth in [0.0, 0.4, 1.0] {
             var total = (y: 0, x: 0), frames = 0

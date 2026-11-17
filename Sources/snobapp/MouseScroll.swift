@@ -43,9 +43,10 @@ enum MouseScroll {
         let reverseH = s.reverseEnabled && s.reverseHorizontal
         let accel = min(max(s.scrollAcceleration, 0), 1)
         let damp = accel < 0.999
+        let speed = min(max(s.scrollSpeed, 0.5), 3)
 
         // Pas de lecture de champs inutile quand rien n'est à faire.
-        guard reverseV || reverseH || damp else { return }
+        guard reverseV || reverseH || damp || speed != 1 else { return }
 
         var factorV = 1.0, factorH = 1.0
         if damp {
@@ -64,6 +65,8 @@ enum MouseScroll {
                 factorH = dampFactor(ph, base: base, exponent: accel)
             }
         }
+        // 3. Vitesse (v5.1) : multiplicateur global, appliqué après l'amortissement.
+        factorV *= speed; factorH *= speed
         if reverseV { factorV = -factorV }
         if reverseH { factorH = -factorH }
 

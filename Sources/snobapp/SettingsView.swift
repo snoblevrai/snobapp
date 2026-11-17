@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage(Key.scrollAcceleration) private var scrollAcceleration = 0.5
     @AppStorage(Key.smoothScrollEnabled) private var smoothScrollEnabled = true
     @AppStorage(Key.smoothness) private var smoothness = 0.4
+    @AppStorage(Key.scrollSpeed) private var scrollSpeed = 1.0
     @AppStorage(Key.lidSleepEnabled) private var lidSleepEnabled = true
     @AppStorage(Key.batteryLimitEnabled) private var batteryLimitEnabled = true
     @AppStorage(Key.batteryLimit) private var batteryLimit = 80
@@ -107,6 +108,19 @@ struct SettingsView: View {
                 Toggle("Inverser le sens de la molette", isOn: $reverseEnabled)
                 Toggle("Vertical", isOn: $reverseVertical).disabled(!reverseEnabled)
                 Toggle("Horizontal", isOn: $reverseHorizontal).disabled(!reverseEnabled)
+                LabeledContent("Vitesse") {
+                    HStack {
+                        Slider(value: $scrollSpeed, in: 0.5...3, step: 0.1) {
+                            EmptyView()
+                        } minimumValueLabel: {
+                            Text("0,5×").font(.caption)
+                        } maximumValueLabel: {
+                            Text("3×").font(.caption)
+                        }
+                        Text(String(format: "%.1f×", scrollSpeed).replacingOccurrences(of: ".", with: ","))
+                            .monospacedDigit().frame(width: 44, alignment: .trailing)
+                    }
+                }
                 LabeledContent("Accélération") {
                     HStack {
                         Slider(value: $scrollAcceleration, in: 0...1, step: 0.05) {
@@ -120,7 +134,7 @@ struct SettingsView: View {
                             .frame(width: 44, alignment: .trailing)
                     }
                 }
-                Text("La vitesse d'un cran lent ne change pas ; seul l'emballement quand on tourne vite est réduit. Le trackpad et la Magic Mouse ne sont jamais modifiés.")
+                Text("Vitesse : multiplie la distance de chaque cran. Accélération : un cran lent ne change pas, seul l'emballement quand on tourne vite est réduit. Le trackpad et la Magic Mouse ne sont jamais modifiés.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

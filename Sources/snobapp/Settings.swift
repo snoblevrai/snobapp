@@ -23,6 +23,7 @@ enum Key {
     static let didImportV3Settings = "didImportV3Settings"
     // v5
     static let smoothScrollEnabled = "smoothScrollEnabled"
+    static let scrollSpeed = "scrollSpeed"                 // 0,5× … 3×
     static let smoothness = "smoothness"                   // 0 (vif) … 1 (très doux)
 }
 
@@ -46,6 +47,7 @@ struct SettingsSnapshot {
     var dischargeMode: Bool
     var smoothScrollEnabled: Bool
     var smoothness: Double
+    var scrollSpeed: Double
     /// Molettes « continues » (haute résolution) : déjà fluides, on ne les relisse pas.
     var smoothContinuous: Bool { false }
 }
@@ -72,6 +74,7 @@ final class Settings {
         Key.dischargeMode: false,
         Key.smoothScrollEnabled: true,
         Key.smoothness: 0.4,
+        Key.scrollSpeed: 1.0,
     ]
 
     private let defaults = UserDefaults.standard
@@ -123,7 +126,8 @@ final class Settings {
             batteryLimit: max(20, min(100, d.integer(forKey: Key.batteryLimit))),
             dischargeMode: d.bool(forKey: Key.dischargeMode),
             smoothScrollEnabled: d.bool(forKey: Key.smoothScrollEnabled),
-            smoothness: d.double(forKey: Key.smoothness)
+            smoothness: d.double(forKey: Key.smoothness),
+            scrollSpeed: d.double(forKey: Key.scrollSpeed)
         )
     }
 
