@@ -61,6 +61,55 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-settings"), i + 1 < Co
     exit(0)
 }
 
+// `snobapp --bench` : coût processeur de chaque chemin chaud (sans rien afficher ni défiler).
+if CommandLine.arguments.contains("--bench") {
+    func cpu() -> Double {
+        var u = rusage(); getrusage(RUSAGE_SELF, &u)
+        return Double(u.ru_utime.tv_sec + u.ru_stime.tv_sec) + Double(u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1e6
+    }
+    func measure(_ name: String, _ n: Int, _ body: () -> Void) {
+        let c0 = cpu(); for _ in 0..<n { body() }
+        let us = (cpu() - c0) / Double(n) * 1e6
+        print(String(format: "  %-52@ %8.2f µs", name as NSString, us))
+    }
+    var snap = Settings.shared.snapshot
+    snap.reverseEnabled = true; snap.reverseVertical = true; snap.scrollAcceleration = 0.5; snap.scrollSpeed = 2
+    let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: 1, wheel2: 0, wheel3: 0)!
+    print("Coût par appel :")
+    measure("Settings.shared.snapshot", 200_000) { _ = Settings.shared.snapshot }
+    measure("MouseScroll.isFromTouchSurface (trackpad)", 200_000) { _ = MouseScroll.isFromTouchSurface(wheel) }
+    measure("MouseScroll.process (molette : inversion+accél+vitesse)", 200_000) {
+        wheel.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: 10)
+        MouseScroll.process(wheel, settings: snap)
+    }
+    measure("Création d'un évènement molette pixel", 200_000) {
+        _ = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 3, wheel2: 0, wheel3: 0)
+    }
+    var tap = snap; tap.middleClickEnabled = true; tap.tapToClick = true; tap.fingers = 3
+    measure("Transition du nombre de doigts (clic du milieu)", 200_000) {
+        _ = MiddleClickEngine.shared.transition(fingerCount: 3, sum: .init(1, 1), last: .zero, settings: tap)
+        _ = MiddleClickEngine.shared.transition(fingerCount: 0, sum: .zero, last: .init(1, 1), settings: tap, now: 0)
+    }
+    // Défilement fluide en continu pendant 3 s (crans toutes les 50 ms), écran sous le curseur.
+    var events = 0
+    SmoothScroller.shared.testOutput = { dy, dx in
+        _ = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: dy, wheel2: dx, wheel3: 0)
+        events += 1
+    }
+    let c0 = cpu(), w0 = Date()
+    while Date().timeIntervalSince(w0) < 3 {
+        let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: 0, wheel3: 0)!
+        e.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: -40)
+        _ = SmoothScroller.shared.absorb(e, smoothness: 0.1)
+        Thread.sleep(forTimeInterval: 0.05)
+    }
+    let rate = SmoothScroller.shared.clockRate
+    while SmoothScroller.shared.isAnimating { Thread.sleep(forTimeInterval: 0.01) }
+    let wall = Date().timeIntervalSince(w0)
+    print(String(format: "Défilement fluide continu (%.0f Hz) : %.1f %% d'un cœur, %d évènements en %.1f s", rate, (cpu() - c0) / wall * 100, events, wall))
+    exit(0)
+}
+
 // `snobapp --selftest` : vérifie le pont MultitouchSupport sans interface ni permission.
 if CommandLine.arguments.contains("--selftest") {
     do {
