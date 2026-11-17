@@ -122,6 +122,13 @@ enum HelperInstaller {
     static var isOutdated: Bool {
         if let cached = outdatedCache { return cached }
         guard isInstalled, let exe = Bundle.main.executablePath else { outdatedCache = false; return false }
+        // v7.3 : on compare la version de la logique du service, et non plus le binaire entier
+        // (qui change à chaque version de l'app même quand le service, lui, n'a pas changé).
+        if let running = BatteryStatus.readJSON(from: HelperPaths.status)?.daemonBuild, !running.isEmpty {
+            let v = running != BatteryDaemon.build
+            outdatedCache = v
+            return v
+        }
         let v = !FileManager.default.contentsEqual(atPath: exe, andPath: HelperPaths.binary)
         outdatedCache = v
         return v

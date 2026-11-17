@@ -11,7 +11,7 @@
 | | |
 |---|---|
 | **Clic du milieu au trackpad** | cliquer avec 3 doigts (réglable) = clic du milieu ; taper avec 3 doigts aussi. Apps ignorables. |
-| **Molette de la souris** | inversion verticale / horizontale, **vitesse réglable** (0,5× à 3×), **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS) et **défilement fluide** avec réglage de douceur. Le trackpad et la Magic Mouse ne sont jamais touchés. |
+| **Molette de la souris** | inversion verticale / horizontale, **vitesse réglable** (0,5× à 3×), **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS) et **défilement fluide** avec réglage de douceur. Le trackpad et la Magic Mouse ne sont jamais touchés ; sans souris externe branchée, la molette n'est pas du tout interceptée. |
 | **Veille capot fermé** | fermer le capot met le Mac en veille, même avec des écrans externes branchés. |
 | **Limite de charge** | recharge max. réglable et **mode décharge** dans le menu. |
 
@@ -53,7 +53,8 @@ Signature ad hoc avec une exigence désignée stable (`identifier`) : l'autorisa
 | `MiddleClickEngine.swift` | détection du tap à N doigts, réécriture des clics |
 | `MouseScroll.swift` | inversion et amortissement de l'accélération de la molette |
 | `SmoothScroller.swift` | défilement fluide : chaque cran est étalé sur l'intervalle mesuré entre les crans, puis lissé par un ressort à amortissement critique, à la cadence de l'écran (CVDisplayLink) |
-| `EventTap.swift` | un seul tap d'évènements pour les clics et la molette |
+| `EventTap.swift` | interception des clics et de la molette (deux taps, chacun actif seulement quand il sert), thread dédié |
+| `PointingDevices.swift` | détection d'une souris externe (registre IOKit) |
 | `LidSleep.swift` | veille à la fermeture du capot (`IOPMrootDomain`, `IOPMSleepSystem`) |
 | `BatteryController.swift` | limite native, installation du service |
 | `BatteryDaemon.swift` | service root : décharge et limite sous le palier natif |

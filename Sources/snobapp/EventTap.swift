@@ -1,13 +1,27 @@
 import AppKit
 
-/// Un seul tap d'évènements pour le clic du milieu et la molette.
-/// v7.2 : il tourne sur son propre thread (priorité interactive) et non plus sur le thread
-/// principal, partagé avec le menu et SwiftUI : latence plus faible et indépendante de l'interface.
+/// Interception des clics (clic du milieu) et de la molette, sur un thread dédié.
+///
+/// v7.3 : deux taps distincts, chacun actif seulement quand il sert.
+/// - Clics : seulement si le clic du milieu est activé.
+/// - Molette : seulement si une **souris externe est branchée** et qu'une fonction de molette
+///   est active. macOS ne sait pas filtrer un tap par appareil : tant qu'il est actif, il voit
+///   aussi le défilement du trackpad (laissé passer aussitôt). Sans souris, il est coupé et le
+///   trackpad n'est plus du tout intercepté.
+/// v7.2 : le thread dédié (priorité interactive) évite le thread principal, partagé avec le menu
+/// et SwiftUI.
 final class EventTap {
     static let shared = EventTap()
 
-    private var tap: CFMachPort?
-    private var source: CFRunLoopSource?
+    private struct Tap {
+        var port: CFMachPort
+        var source: CFRunLoopSource
+        var wanted = false
+    }
+
+    private let lock = NSLock()
+    private var clickTap: Tap?
+    private var scrollTap: Tap?
     private var runLoop: CFRunLoop?
     private var thread: Thread?
     private init() {}
@@ -33,60 +47,104 @@ final class EventTap {
         return loop!
     }
 
-    var isRunning: Bool { tap.map { CGEvent.tapIsEnabled(tap: $0) } ?? false }
+    private static func mask(_ types: [CGEventType]) -> CGEventMask {
+        types.reduce(0) { $0 | (1 << $1.rawValue) }
+    }
 
-    private static let mask: CGEventMask = [
-        CGEventType.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .scrollWheel,
-    ].reduce(0) { $0 | (1 << $1.rawValue) }
-
-    @discardableResult
-    func start() -> Bool {
-        guard tap == nil else { return true }
-        guard let port = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: Self.mask,
-            callback: { _, type, event, _ in EventTap.shared.handle(type: type, event: event) },
-            userInfo: nil
-        ) else {
-            NSLog("snobapp: création du tap impossible (permission Accessibilité ?)")
-            return false
-        }
-        tap = port
-        source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
+    private func makeTap(_ mask: CGEventMask, scroll: Bool) -> Tap? {
+        let callback: CGEventTapCallBack = scroll
+            ? { _, type, event, _ in EventTap.shared.handleScroll(type: type, event: event) }
+            : { _, type, event, _ in EventTap.shared.handleClick(type: type, event: event) }
+        guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
+                                           options: .defaultTap, eventsOfInterest: mask,
+                                           callback: callback, userInfo: nil) else { return nil }
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)!
         let loop = tapRunLoop()
         CFRunLoopAddSource(loop, source, .commonModes)
         CFRunLoopWakeUp(loop)
-        CGEvent.tapEnable(tap: port, enable: true)
-        return true
+        CGEvent.tapEnable(tap: port, enable: false)   // activé par update()
+        return Tap(port: port, source: source)
+    }
+
+    @discardableResult
+    func start() -> Bool {
+        lock.lock()
+        if clickTap == nil {
+            clickTap = makeTap(Self.mask([.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp]), scroll: false)
+        }
+        if scrollTap == nil { scrollTap = makeTap(Self.mask([.scrollWheel]), scroll: true) }
+        let ok = clickTap != nil && scrollTap != nil
+        lock.unlock()
+        if !ok { NSLog("snobapp: création du tap impossible (permission Accessibilité ?)") }
+        update()
+        return ok
+    }
+
+    /// Active ou coupe chaque tap selon les réglages et la présence d'une souris.
+    func update() {
+        let s = Settings.shared.snapshot
+        let wheelFeature = (s.reverseEnabled && (s.reverseVertical || s.reverseHorizontal))
+            || s.scrollAcceleration < 0.999 || s.scrollSpeed != 1 || s.smoothScrollEnabled
+        lock.lock()
+        clickTap?.wanted = s.middleClickEnabled
+        scrollTap?.wanted = wheelFeature && PointingDevices.shared.externalMousePresent
+        for tap in [clickTap, scrollTap].compactMap({ $0 })
+        where CGEvent.tapIsEnabled(tap: tap.port) != tap.wanted {
+            CGEvent.tapEnable(tap: tap.port, enable: tap.wanted)
+        }
+        lock.unlock()
+    }
+
+    /// État pour le diagnostic : (clics, molette).
+    var activeTaps: (clicks: Bool, wheel: Bool) {
+        lock.lock(); defer { lock.unlock() }
+        return (clickTap.map { CGEvent.tapIsEnabled(tap: $0.port) } ?? false,
+                scrollTap.map { CGEvent.tapIsEnabled(tap: $0.port) } ?? false)
     }
 
     func stop() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let source, let runLoop { CFRunLoopRemoveSource(runLoop, source, .commonModes) }
-        tap = nil
-        source = nil
+        lock.lock()
+        for tap in [clickTap, scrollTap].compactMap({ $0 }) {
+            CGEvent.tapEnable(tap: tap.port, enable: false)
+            if let runLoop { CFRunLoopRemoveSource(runLoop, tap.source, .commonModes) }
+        }
+        clickTap = nil
+        scrollTap = nil
+        lock.unlock()
     }
 
-    private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        switch type {
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            // macOS coupe un tap jugé trop lent : on le réarme immédiatement.
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-        case .scrollWheel:
-            // Trackpad / Magic Mouse (~100 évènements/s) et nos évènements lissés : rien à faire.
-            if SmoothScroller.isOurs(event) || MouseScroll.isFromTouchSurface(event) { break }
-            let s = Settings.shared.snapshot
-            MouseScroll.process(event, settings: s)
-            // v5 : molette de souris lissée (le trackpad garde son propre défilement).
-            if s.smoothScrollEnabled, !MouseScroll.isFromTouchSurface(event),
-               event.getIntegerValueField(.scrollWheelEventIsContinuous) == 0 || s.smoothContinuous,
-               SmoothScroller.shared.absorb(event, smoothness: s.smoothness) {
-                return nil
-            }
-        default:
+    /// macOS coupe un tap jugé trop lent : on le réarme s'il doit être actif.
+    private func reenableIfWanted(scroll: Bool) {
+        lock.lock()
+        if let tap = scroll ? scrollTap : clickTap, tap.wanted { CGEvent.tapEnable(tap: tap.port, enable: true) }
+        lock.unlock()
+    }
+
+    private func handleClick(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            reenableIfWanted(scroll: false)
+        } else {
             _ = MiddleClickEngine.shared.rewriteClick(event, type: type)
+        }
+        return Unmanaged.passUnretained(event)
+    }
+
+    private func handleScroll(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            reenableIfWanted(scroll: true)
+            return Unmanaged.passUnretained(event)
+        }
+        // Trackpad / Magic Mouse et nos évènements lissés : rien à faire, on rend la main aussitôt.
+        if SmoothScroller.isOurs(event) || MouseScroll.isFromTouchSurface(event) {
+            return Unmanaged.passUnretained(event)
+        }
+        let s = Settings.shared.snapshot
+        MouseScroll.process(event, settings: s)
+        // Molette de souris lissée.
+        if s.smoothScrollEnabled,
+           event.getIntegerValueField(.scrollWheelEventIsContinuous) == 0 || s.smoothContinuous,
+           SmoothScroller.shared.absorb(event, smoothness: s.smoothness) {
+            return nil
         }
         return Unmanaged.passUnretained(event)
     }

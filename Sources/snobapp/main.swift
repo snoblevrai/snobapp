@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LidSleep.shared.start()
         BatteryController.shared.start()
         MiddleClickEngine.shared.start()
+        PointingDevices.shared.start()
+        PointingDevices.shared.onChange.append { EventTap.shared.update() }
+        Settings.shared.onChange.append { EventTap.shared.update() }
         Accessibility.waitForTrust { EventTap.shared.start() }
 
         // Au premier lancement (ou si la permission manque), ouvrir les réglages.
@@ -46,11 +49,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// `snobapp --daemon` : service root lancé par launchd (limite de charge, décharge).
-if CommandLine.arguments.contains("--daemon") {
-    BatteryDaemon.shared.run()
-}
-
 // `snobapp --render-settings fichier.png` : dessine la fenêtre de réglages (diagnostic).
 if let i = CommandLine.arguments.firstIndex(of: "--render-settings"), i + 1 < CommandLine.arguments.count {
     _ = NSApplication.shared
@@ -59,6 +57,11 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-settings"), i + 1 < Co
     let tab = i + 2 < CommandLine.arguments.count ? Int(CommandLine.arguments[i + 2]) ?? 0 : 0
     SettingsWindowController.render(to: CommandLine.arguments[i + 1], tab: tab)
     exit(0)
+}
+
+// `snobapp --daemon` : service root lancé par launchd (limite de charge, décharge).
+if CommandLine.arguments.contains("--daemon") {
+    BatteryDaemon.shared.run()
 }
 
 // `snobapp --bench` : coût processeur de chaque chemin chaud (sans rien afficher ni défiler).
@@ -118,6 +121,7 @@ if CommandLine.arguments.contains("--selftest") {
         print("MultitouchSupport: OK, \(n) appareil(s)")
         CSMultitouchStop()
         print("Accessibilité accordée: \(AXIsProcessTrusted())")
+        print("Souris externe détectée : \(PointingDevices.scan() ? "oui — la molette sera interceptée" : "non — la molette ne sera pas interceptée")")
         print("SMC (adaptateur): \(SMCBackend.detect()?.name ?? "aucune clé")")
         var steps = [Int32](repeating: 0, count: 16)
         let stepCount = CSNativeLimitAvailable(&steps, 16)
