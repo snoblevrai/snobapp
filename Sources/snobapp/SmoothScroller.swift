@@ -241,8 +241,10 @@ final class SmoothScroller {
                               wheelCount: 2, wheel1: dy, wheel2: dx, wheel3: 0) else { return }
         e.flags = flags
         e.setIntegerValueField(.eventSourceUserData, value: Self.marker)
-        // v7.2 : posté juste après les taps de session, notre propre tap ne le revoit pas
-        // (avant : chaque évènement lissé — 240/s sur un écran 240 Hz — revenait dans le tap).
-        e.post(tap: .cgAnnotatedSessionEventTap)
+        // Posté au niveau de la session : c'est le seul point qui livre réellement les
+        // évènements molette aux fenêtres. (v7.2 avait essayé cgAnnotatedSessionEventTap pour
+        // que notre tap ne les revoie pas : les apps ne les recevaient plus, plus aucun
+        // défilement.) Notre tap les reconnaît à leur marque et les laisse passer en premier.
+        e.post(tap: .cgSessionEventTap)
     }
 }
