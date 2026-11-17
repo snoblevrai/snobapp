@@ -4,14 +4,14 @@
 
 <p align="center">Une petite app de barre de menus macOS qui réunit quatre utilitaires en un seul.</p>
 
-> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse and acceleration control, sleep on lid close even with external displays, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
+> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, acceleration control and smooth scrolling, sleep on lid close even with external displays, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
 
 ## Fonctions
 
 | | |
 |---|---|
 | **Clic du milieu au trackpad** | cliquer avec 3 doigts (réglable) = clic du milieu ; taper avec 3 doigts aussi. Apps ignorables. |
-| **Molette de la souris** | inversion verticale / horizontale et **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS). Le trackpad et la Magic Mouse ne sont jamais touchés. |
+| **Molette de la souris** | inversion verticale / horizontale, **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS) et **défilement fluide** avec réglage de douceur. Le trackpad et la Magic Mouse ne sont jamais touchés. |
 | **Veille capot fermé** | fermer le capot met le Mac en veille, même avec des écrans externes branchés. |
 | **Limite de charge** | recharge max. réglable et **mode décharge** dans le menu. |
 
@@ -52,6 +52,7 @@ Signature ad hoc avec une exigence désignée stable (`identifier`) : l'autorisa
 | `Sources/CSMC/` | accès SMC (AppleSMC) et limite native (PowerUI.framework, privé) |
 | `MiddleClickEngine.swift` | détection du tap à N doigts, réécriture des clics |
 | `MouseScroll.swift` | inversion et amortissement de l'accélération de la molette |
+| `SmoothScroller.swift` | défilement fluide (réserve de pixels restituée à ~120 Hz, décroissance exponentielle) |
 | `EventTap.swift` | un seul tap d'évènements pour les clics et la molette |
 | `LidSleep.swift` | veille à la fermeture du capot (`IOPMrootDomain`, `IOPMSleepSystem`) |
 | `BatteryController.swift` | limite native, installation du service |

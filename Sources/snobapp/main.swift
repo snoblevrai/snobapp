@@ -56,7 +56,8 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-settings"), i + 1 < Co
     _ = NSApplication.shared
     Settings.shared.importV3SettingsIfNeeded()
     BatteryController.shared.start()
-    SettingsWindowController.render(to: CommandLine.arguments[i + 1])
+    let tab = i + 2 < CommandLine.arguments.count ? Int(CommandLine.arguments[i + 2]) ?? 0 : 0
+    SettingsWindowController.render(to: CommandLine.arguments[i + 1], tab: tab)
     exit(0)
 }
 
@@ -94,6 +95,26 @@ if CommandLine.arguments.contains("--selftest") {
             if !ok { failures += 1 }
             print("  \(ok ? "✓" : "✗") \(name)\(c.dischargeRequest != 0 ? " [décharge finie: \(r.dischargeFinished == 1)]" : "")")
         }
+        // Défilement fluide : la distance émise doit égaler la distance reçue.
+        for smooth in [0.0, 0.4, 1.0] {
+            var total = (y: 0, x: 0), frames = 0
+            let lock = NSLock()
+            SmoothScroller.shared.testOutput = { dy, dx in lock.lock(); total.y += Int(dy); total.x += Int(dx); frames += 1; lock.unlock() }
+            for (dy, dx) in [(-37.0, 0.0), (-41.0, 3.0), (-12.0, 0.0)] {
+                let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: 0, wheel3: 0)!
+                e.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: dy)
+                e.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: dx)
+                _ = SmoothScroller.shared.absorb(e, smoothness: smooth)
+                Thread.sleep(forTimeInterval: 0.02)
+            }
+            let start = Date()
+            while SmoothScroller.shared.isAnimating && Date().timeIntervalSince(start) < 3 { Thread.sleep(forTimeInterval: 0.01) }
+            let elapsed = Date().timeIntervalSince(start)
+            let ok = total.y == -90 && total.x == 3 && !SmoothScroller.shared.isAnimating
+            if !ok { failures += 1 }
+            print("  \(ok ? "✓" : "✗") lissage douceur \(smooth) : Δy=\(total.y) (attendu -90), Δx=\(total.x) (attendu 3), \(frames) images, fin \(Int(elapsed * 1000)) ms après le dernier cran")
+        }
+        SmoothScroller.shared.testOutput = nil
         if failures > 0 { exit(3) }
         exit(n > 0 ? 0 : 2)
     }

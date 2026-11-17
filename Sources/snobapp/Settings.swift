@@ -21,6 +21,9 @@ enum Key {
     static let dischargeMode = "dischargeMode"
     static let dischargeRequestID = "dischargeRequestID"
     static let didImportV3Settings = "didImportV3Settings"
+    // v5
+    static let smoothScrollEnabled = "smoothScrollEnabled"
+    static let smoothness = "smoothness"                   // 0 (vif) … 1 (très doux)
 }
 
 /// Instantané immuable des réglages, lu par les chemins chauds (trames tactiles ~100 Hz,
@@ -41,6 +44,10 @@ struct SettingsSnapshot {
     var batteryLimitEnabled: Bool
     var batteryLimit: Int
     var dischargeMode: Bool
+    var smoothScrollEnabled: Bool
+    var smoothness: Double
+    /// Molettes « continues » (haute résolution) : déjà fluides, on ne les relisse pas.
+    var smoothContinuous: Bool { false }
 }
 
 final class Settings {
@@ -63,6 +70,8 @@ final class Settings {
         Key.batteryLimitEnabled: true,
         Key.batteryLimit: 80,
         Key.dischargeMode: false,
+        Key.smoothScrollEnabled: true,
+        Key.smoothness: 0.4,
     ]
 
     private let defaults = UserDefaults.standard
@@ -112,7 +121,9 @@ final class Settings {
             lidSleepEnabled: d.bool(forKey: Key.lidSleepEnabled),
             batteryLimitEnabled: d.bool(forKey: Key.batteryLimitEnabled),
             batteryLimit: max(20, min(100, d.integer(forKey: Key.batteryLimit))),
-            dischargeMode: d.bool(forKey: Key.dischargeMode)
+            dischargeMode: d.bool(forKey: Key.dischargeMode),
+            smoothScrollEnabled: d.bool(forKey: Key.smoothScrollEnabled),
+            smoothness: d.double(forKey: Key.smoothness)
         )
     }
 

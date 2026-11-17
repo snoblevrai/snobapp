@@ -48,7 +48,15 @@ final class EventTap {
             // macOS coupe un tap jugé trop lent : on le réarme immédiatement.
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
         case .scrollWheel:
-            MouseScroll.process(event, settings: Settings.shared.snapshot)
+            if SmoothScroller.isOurs(event) { break }          // nos évènements lissés
+            let s = Settings.shared.snapshot
+            MouseScroll.process(event, settings: s)
+            // v5 : molette de souris lissée (le trackpad garde son propre défilement).
+            if s.smoothScrollEnabled, !MouseScroll.isFromTouchSurface(event),
+               event.getIntegerValueField(.scrollWheelEventIsContinuous) == 0 || s.smoothContinuous,
+               SmoothScroller.shared.absorb(event, smoothness: s.smoothness) {
+                return nil
+            }
         default:
             _ = MiddleClickEngine.shared.rewriteClick(event, type: type)
         }

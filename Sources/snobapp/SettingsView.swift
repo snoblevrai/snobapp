@@ -13,6 +13,8 @@ struct SettingsView: View {
     @AppStorage(Key.reverseVertical) private var reverseVertical = true
     @AppStorage(Key.reverseHorizontal) private var reverseHorizontal = true
     @AppStorage(Key.scrollAcceleration) private var scrollAcceleration = 0.5
+    @AppStorage(Key.smoothScrollEnabled) private var smoothScrollEnabled = true
+    @AppStorage(Key.smoothness) private var smoothness = 0.4
     @AppStorage(Key.lidSleepEnabled) private var lidSleepEnabled = true
     @AppStorage(Key.batteryLimitEnabled) private var batteryLimitEnabled = true
     @AppStorage(Key.batteryLimit) private var batteryLimit = 80
@@ -25,7 +27,7 @@ struct SettingsView: View {
     var body: some View {
         // Onglets : avec une seule page défilante, les sections du bas (Batterie, Capot…)
         // restaient invisibles sans faire défiler (retour utilisateur v3).
-        TabView {
+        TabView(selection: $model.tab) {
             Form {
             if !model.trusted {
                 Section {
@@ -89,6 +91,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Clic", systemImage: "hand.tap") }
+            .tag(0)
             Form {
             if !model.trusted {
                 Section {
@@ -120,9 +123,30 @@ struct SettingsView: View {
                 Text("La vitesse d'un cran lent ne change pas ; seul l'emballement quand on tourne vite est réduit. Le trackpad et la Magic Mouse ne sont jamais modifiés.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+
+            Section("Défilement fluide") {
+                Toggle("Lisser la molette", isOn: $smoothScrollEnabled)
+                LabeledContent("Douceur") {
+                    HStack {
+                        Slider(value: $smoothness, in: 0...1, step: 0.05) {
+                            EmptyView()
+                        } minimumValueLabel: {
+                            Text("Vif").font(.caption)
+                        } maximumValueLabel: {
+                            Text("Doux").font(.caption)
+                        }
+                        Text("\(Int((SmoothScroller.timeConstant(smoothness: smoothness) * 1000).rounded())) ms")
+                            .monospacedDigit().frame(width: 52, alignment: .trailing)
+                    }
+                }
+                .disabled(!smoothScrollEnabled)
+                Text("Chaque cran est étalé dans le temps avec une décélération douce. La distance parcourue reste la même.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             }
             .formStyle(.grouped)
             .tabItem { Label("Défilement", systemImage: "computermouse") }
+            .tag(1)
             Form {
             if !model.trusted {
                 Section {
@@ -164,6 +188,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Batterie", systemImage: "battery.75percent") }
+            .tag(2)
             Form {
             if !model.trusted {
                 Section {
@@ -183,6 +208,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Capot", systemImage: "laptopcomputer") }
+            .tag(3)
             Form {
             if !model.trusted {
                 Section {
@@ -203,6 +229,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Général", systemImage: "gearshape") }
+            .tag(4)
         }
         .padding(.top, 8)
         .frame(width: 520, height: 600)
@@ -260,6 +287,7 @@ final class SettingsModel: ObservableObject {
     @Published var trusted = Accessibility.isTrusted
     /// Incrémenté chaque seconde pour rafraîchir l'état du service.
     @Published var tick = 0
+    @Published var tab = 0
 
     /// Resynchronise quand la liste est modifiée depuis le menu de la barre d'état.
     func refresh() {
@@ -270,8 +298,10 @@ final class SettingsModel: ObservableObject {
 }
 
 final class SettingsWindowController {
-    static func render(to path: String) {
-        let view = NSHostingView(rootView: SettingsView(model: SettingsModel()))
+    static func render(to path: String, tab: Int = 0) {
+        let model = SettingsModel()
+        model.tab = tab
+        let view = NSHostingView(rootView: SettingsView(model: model))
         view.frame = NSRect(x: 0, y: 0, width: 520, height: 600)
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
         window.contentView = view
