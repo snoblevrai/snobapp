@@ -52,7 +52,7 @@ Signature ad hoc avec une exigence désignée stable (`identifier`) : l'autorisa
 | `Sources/CSMC/` | accès SMC (AppleSMC) et limite native (PowerUI.framework, privé) |
 | `MiddleClickEngine.swift` | détection du tap à N doigts, réécriture des clics |
 | `MouseScroll.swift` | inversion et amortissement de l'accélération de la molette |
-| `SmoothScroller.swift` | défilement fluide (réserve de pixels restituée à ~120 Hz, décroissance exponentielle) |
+| `SmoothScroller.swift` | défilement fluide : chaque cran est étalé sur l'intervalle mesuré entre les crans, puis lissé par un ressort à amortissement critique, à la cadence de l'écran (CVDisplayLink) |
 | `EventTap.swift` | un seul tap d'évènements pour les clics et la molette |
 | `LidSleep.swift` | veille à la fermeture du capot (`IOPMrootDomain`, `IOPMSleepSystem`) |
 | `BatteryController.swift` | limite native, installation du service |

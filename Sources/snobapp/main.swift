@@ -153,6 +153,36 @@ if CommandLine.arguments.contains("--selftest") {
             if !ok { failures += 1 }
             print("  \(ok ? "✓" : "✗") lissage douceur \(smooth) : Δy=\(total.y) (attendu -90), Δx=\(total.x) (attendu 3), \(frames) images, fin \(Int(elapsed * 1000)) ms après le dernier cran")
         }
+        // Régularité (v7) : crans de 40 px toutes les 60 ms ; en régime établi, la vitesse
+        // (déplacement par seconde) ne doit pas pulser à chaque cran.
+        do {
+            var samples: [(t: Double, step: Double)] = []
+            let lock = NSLock()
+            SmoothScroller.shared.testOutput = { _, _ in }
+            SmoothScroller.shared.testStep = { s in lock.lock(); samples.append((CACurrentMediaTime(), s)); lock.unlock() }
+            let t0 = CACurrentMediaTime()
+            for _ in 0..<12 {
+                let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: 0, wheel3: 0)!
+                e.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: -40)
+                _ = SmoothScroller.shared.absorb(e, smoothness: 0.4)
+                Thread.sleep(forTimeInterval: 0.06)
+            }
+            while SmoothScroller.shared.isAnimating { Thread.sleep(forTimeInterval: 0.01) }
+            lock.lock(); let all = samples; lock.unlock()
+            // Vitesse par image sur la fenêtre 0,30–0,66 s (régime établi), puis variation relative.
+            var speeds: [Double] = []
+            for i in 1..<all.count {
+                let dt = all[i].t - all[i - 1].t
+                let t = all[i].t - t0
+                if t > 0.30 && t < 0.66 && dt > 0.002 { speeds.append(Swift.abs(all[i].step) / dt) }
+            }
+            let mean = speeds.reduce(0, +) / Double(max(speeds.count, 1))
+            let spread = ((speeds.max() ?? 0) - (speeds.min() ?? 0)) / max(mean, 1)
+            let ok = spread < 0.25 && !speeds.isEmpty
+            if !ok { failures += 1 }
+            print("  \(ok ? "✓" : "✗") régularité : vitesse moyenne \(Int(mean)) px/s, écart max \(Int(spread * 100)) % (seuil 25 %), \(speeds.count) images")
+        }
+        SmoothScroller.shared.testStep = nil
         SmoothScroller.shared.testOutput = nil
         if failures > 0 { exit(3) }
         exit(n > 0 ? 0 : 2)

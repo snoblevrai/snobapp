@@ -149,12 +149,12 @@ struct SettingsView: View {
                         } maximumValueLabel: {
                             Text("Doux").font(.caption)
                         }
-                        Text("\(Int((SmoothScroller.timeConstant(smoothness: smoothness) * 1000).rounded())) ms")
+                        Text("\(Int((SmoothScroller.settleTime(smoothness: smoothness) * 1000).rounded())) ms")
                             .monospacedDigit().frame(width: 52, alignment: .trailing)
                     }
                 }
                 .disabled(!smoothScrollEnabled)
-                Text("Chaque cran est étalé dans le temps avec une décélération douce. La distance parcourue reste la même.")
+                Text("Chaque cran est découpé en petits pas calés sur l'écran, avec accélération et décélération douces ; en rotation continue la vitesse reste régulière. La durée indiquée est celle d'un cran isolé.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             }
