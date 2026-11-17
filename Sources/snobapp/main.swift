@@ -154,8 +154,11 @@ if CommandLine.arguments.contains("--selftest") {
             print("  \(ok ? "✓" : "✗") lissage douceur \(smooth) : Δy=\(total.y) (attendu -90), Δx=\(total.x) (attendu 3), \(frames) images, fin \(Int(elapsed * 1000)) ms après le dernier cran")
         }
         // Régularité (v7) : crans de 40 px toutes les 60 ms ; en régime établi, la vitesse
-        // (déplacement par seconde) ne doit pas pulser à chaque cran.
-        do {
+        // (déplacement par seconde) ne doit pas pulser à chaque cran. Testé sur chaque écran.
+        var displays = [CGDirectDisplayID](repeating: 0, count: 8); var displayCount: UInt32 = 0
+        CGGetActiveDisplayList(8, &displays, &displayCount)
+        for display in displays.prefix(Int(displayCount)) {
+            SmoothScroller.testDisplay = display
             var samples: [(t: Double, step: Double)] = []
             let lock = NSLock()
             SmoothScroller.shared.testOutput = { _, _ in }
@@ -164,24 +167,26 @@ if CommandLine.arguments.contains("--selftest") {
             for _ in 0..<12 {
                 let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: 0, wheel3: 0)!
                 e.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: -40)
-                _ = SmoothScroller.shared.absorb(e, smoothness: 0.4)
+                _ = SmoothScroller.shared.absorb(e, smoothness: 0.1)
                 Thread.sleep(forTimeInterval: 0.06)
             }
+            let rate = SmoothScroller.shared.clockRate
             while SmoothScroller.shared.isAnimating { Thread.sleep(forTimeInterval: 0.01) }
+            Thread.sleep(forTimeInterval: 0.05)
             lock.lock(); let all = samples; lock.unlock()
-            // Vitesse par image sur la fenêtre 0,30–0,66 s (régime établi), puis variation relative.
             var speeds: [Double] = []
             for i in 1..<all.count {
                 let dt = all[i].t - all[i - 1].t
                 let t = all[i].t - t0
-                if t > 0.30 && t < 0.66 && dt > 0.002 { speeds.append(Swift.abs(all[i].step) / dt) }
+                if t > 0.30 && t < 0.66 && dt > 0.001 { speeds.append(Swift.abs(all[i].step) / dt) }
             }
             let mean = speeds.reduce(0, +) / Double(max(speeds.count, 1))
             let spread = ((speeds.max() ?? 0) - (speeds.min() ?? 0)) / max(mean, 1)
             let ok = spread < 0.25 && !speeds.isEmpty
             if !ok { failures += 1 }
-            print("  \(ok ? "✓" : "✗") régularité : vitesse moyenne \(Int(mean)) px/s, écart max \(Int(spread * 100)) % (seuil 25 %), \(speeds.count) images")
+            print("  \(ok ? "✓" : "✗") régularité écran \(display) (\(Int(rate.rounded())) Hz, douceur 0,1) : écart max \(Int(spread * 100)) % (seuil 25 %), \(speeds.count) images")
         }
+        SmoothScroller.testDisplay = nil
         SmoothScroller.shared.testStep = nil
         SmoothScroller.shared.testOutput = nil
         if failures > 0 { exit(3) }

@@ -63,9 +63,32 @@ final class SmoothScroller {
         event.getIntegerValueField(.eventSourceUserData) == marker
     }
 
-    /// Constante de temps du ressort (s) pour une douceur 0…1 : 15 ms (vif) → 50 ms (doux).
+    /// Constante de temps du ressort (s) pour une douceur 0…1 : 25 ms (vif) → 60 ms (doux).
+    /// v7.1 : plancher relevé (15 → 25 ms) pour garder une vitesse régulière même en mode vif.
     static func timeConstant(smoothness: Double) -> Double {
-        0.015 + min(max(smoothness, 0), 1) * 0.035
+        0.025 + min(max(smoothness, 0), 1) * 0.035
+    }
+
+    /// Écran sous le curseur : c'est lui qui affiche le défilement, l'horloge doit suivre sa
+    /// fréquence (v7.1 — avant, l'horloge suivait l'écran principal : 60 Hz sur le Mac alors que
+    /// l'écran externe affichait à 240 Hz, d'où des pas qui restaient 4 images à l'écran).
+    static var testDisplay: CGDirectDisplayID?
+
+    static func displayUnderCursor() -> CGDirectDisplayID {
+        if let testDisplay { return testDisplay }
+        guard let loc = CGEvent(source: nil)?.location else { return CGMainDisplayID() }
+        var id: CGDirectDisplayID = 0
+        var count: UInt32 = 0
+        guard CGGetDisplaysWithPoint(loc, 1, &id, &count) == .success, count > 0 else { return CGMainDisplayID() }
+        return id
+    }
+
+    /// Fréquence de l'horloge actuelle (Hz), pour le diagnostic.
+    var clockRate: Double {
+        lock.lock(); defer { lock.unlock() }
+        guard let link = displayLink else { return fallbackTimer == nil ? 0 : 120 }
+        let p = CVDisplayLinkGetNominalOutputVideoRefreshPeriod(link)
+        return p.timeValue > 0 ? Double(p.timeScale) / Double(p.timeValue) : 0
     }
 
     /// Durée pour parcourir 95 % d'un cran isolé (affichée dans les réglages), par simulation.
@@ -99,7 +122,14 @@ final class SmoothScroller {
         // Horloge encore en place (arrêt pas encore exécuté) : on la réutilise.
         let needsStart = !running && displayLink == nil && fallbackTimer == nil
         if !running { running = true; lastTick = CACurrentMediaTime() }
+        let link = displayLink
         lock.unlock()
+
+        // Horloge déjà active : si le curseur a changé d'écran, elle le suit.
+        if let link {
+            let target = Self.displayUnderCursor()
+            if CVDisplayLinkGetCurrentCGDisplay(link) != target { CVDisplayLinkSetCurrentCGDisplay(link, target) }
+        }
 
         if needsStart { startClock() }
         return true
@@ -118,7 +148,7 @@ final class SmoothScroller {
 
     private func startClock() {
         var link: CVDisplayLink?
-        if CVDisplayLinkCreateWithActiveCGDisplays(&link) == kCVReturnSuccess, let link {
+        if CVDisplayLinkCreateWithCGDisplay(Self.displayUnderCursor(), &link) == kCVReturnSuccess, let link {
             CVDisplayLinkSetOutputHandler(link) { _, _, _, _, _ in
                 SmoothScroller.shared.tick()
                 return kCVReturnSuccess
