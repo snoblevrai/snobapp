@@ -7,7 +7,8 @@ enum HelperPaths {
     static let label = "io.github.snoblevrai.snobapp.helper"
     static let binary = "/Library/PrivilegedHelperTools/\(label)"
     static let plist = "/Library/LaunchDaemons/\(label).plist"
-    static let directory = "/Library/Application Support/snobapp"
+    static let directory = ProcessInfo.processInfo.environment["SNOBAPP_HELPER_DIR"]
+        ?? "/Library/Application Support/snobapp"
     static let config = directory + "/battery-config.json"
     static let status = directory + "/battery-status.json"
 }
@@ -23,7 +24,7 @@ struct BatteryConfig: Codable, Equatable {
     var dischargeRequest: Double = 0
 }
 
-struct BatteryStatus: Codable {
+struct BatteryStatus: Codable, Equatable {
     var percent = 0
     var onAC = false
     var charging = false

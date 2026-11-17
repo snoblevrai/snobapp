@@ -18,7 +18,7 @@ import IOKit.pwr_mgt
 ///   la batterie se vider sans surveillance ; au pire elle remonte au palier natif.
 final class BatteryDaemon {
     static let shared = BatteryDaemon()
-    static let build = "3.0"
+    static let build = "6.0"
 
     private var backend: SMCBackend?
     // Inactif tant que l'app n'a pas écrit de configuration.
@@ -29,6 +29,13 @@ final class BatteryDaemon {
     private var notifier: io_object_t = 0
     private var powerPort: IONotificationPortRef?
     private var configSource: DispatchSourceFileSystemObject?
+    private var lastConfigData: Data?
+    private var lastWrittenStatus: BatteryStatus?
+    private var evaluateScheduled = false
+    /// Signe de vie : l'état est réécrit au moins toutes les 60 s, même s'il n'a pas changé.
+    private static let heartbeat: TimeInterval = 60
+    /// Nombre d'écritures de l'état (diagnostic, journalisé à l'arrêt).
+    private var statusWrites = 0
     // Macros IOKit non importées en Swift (IOMessage.h).
     private static let systemWillSleep: natural_t = 0xE000_0280
     private static let canSystemSleep: natural_t = 0xE000_0270
@@ -47,14 +54,14 @@ final class BatteryDaemon {
         Self.keep(term)
 
         // Changements d'alimentation (branchement, % batterie).
-        if let src = IOPSNotificationCreateRunLoopSource({ _ in BatteryDaemon.shared.evaluate() }, nil)?
+        if let src = IOPSNotificationCreateRunLoopSource({ _ in BatteryDaemon.shared.scheduleEvaluate() }, nil)?
             .takeRetainedValue() {
             CFRunLoopAddSource(CFRunLoopGetMain(), src, .defaultMode)
         }
         registerSleepNotifications()
         watchConfig()
 
-        Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { _ in BatteryDaemon.shared.evaluate() }
+        Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { _ in BatteryDaemon.shared.scheduleEvaluate() }
         evaluate()
         RunLoop.main.run()
         exit(0)
@@ -65,8 +72,19 @@ final class BatteryDaemon {
 
     // MARK: - Boucle de contrôle
 
+    /// Regroupe les demandes rapprochées (notifications d'alimentation, fichiers, minuterie) :
+    /// au plus une évaluation toutes les 0,5 s, quoi qu'il arrive.
+    func scheduleEvaluate() {
+        guard !evaluateScheduled else { return }
+        evaluateScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            BatteryDaemon.shared.evaluateScheduled = false
+            BatteryDaemon.shared.evaluate()
+        }
+    }
+
     func evaluate() {
-        config = BatteryConfig.readJSON(from: HelperPaths.config) ?? config
+        reloadConfigIfChanged()
         let battery = Self.readBattery()
         status.percent = battery.percent
         status.onAC = battery.onAC
@@ -78,8 +96,33 @@ final class BatteryDaemon {
         let wantInhibit = d.inhibit
         setAdapterInhibited(wantInhibit)
         status.adapterInhibited = adapterInhibited
-        status.updated = Date().timeIntervalSince1970
+        writeStatusIfNeeded()
+    }
+
+    /// v6 : n'écrit l'état que s'il a changé, ou pour le signe de vie. Avant, chaque évaluation
+    /// réécrivait le fichier, ce qui réveillait la surveillance du dossier → boucle infinie.
+    private func writeStatusIfNeeded(force: Bool = false) {
+        let now = Date().timeIntervalSince1970
+        var comparable = status
+        comparable.updated = lastWrittenStatus?.updated ?? 0
+        let changed = comparable != lastWrittenStatus
+        let stale = now - (lastWrittenStatus?.updated ?? 0) >= Self.heartbeat
+        guard force || changed || stale else { return }
+        status.updated = now
         status.writeJSON(to: HelperPaths.status)
+        lastWrittenStatus = status
+        statusWrites += 1
+    }
+
+    /// Relit la configuration seulement si son contenu a changé.
+    @discardableResult
+    private func reloadConfigIfChanged() -> Bool {
+        guard let data = FileManager.default.contents(atPath: HelperPaths.config), data != lastConfigData else {
+            return false
+        }
+        lastConfigData = data
+        if let c = try? JSONDecoder().decode(BatteryConfig.self, from: data) { config = c }
+        return true
     }
 
     /// Décision pure (testée par `--selftest`) : couper l'adaptateur ou non.
@@ -123,7 +166,8 @@ final class BatteryDaemon {
     private func shutdown() {
         releaseAdapter()
         status.adapterInhibited = false
-        status.writeJSON(to: HelperPaths.status)
+        writeStatusIfNeeded(force: true)
+        NSLog("snobapp helper: arrêt (\(statusWrites) écritures d'état depuis le démarrage)")
         exit(0)
     }
 
@@ -149,7 +193,7 @@ final class BatteryDaemon {
         case Self.canSystemSleep:
             IOAllowPowerChange(rootPort, notificationID)
         case Self.systemHasPoweredOn:
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { BatteryDaemon.shared.evaluate() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { BatteryDaemon.shared.scheduleEvaluate() }
         default:
             break
         }
@@ -159,12 +203,17 @@ final class BatteryDaemon {
 
     private func watchConfig() {
         try? FileManager.default.createDirectory(atPath: HelperPaths.directory, withIntermediateDirectories: true)
+        // Hors de l'index Spotlight : ces fichiers techniques n'ont rien à y faire.
+        FileManager.default.createFile(atPath: HelperPaths.directory + "/.metadata_never_index", contents: nil)
         if !FileManager.default.fileExists(atPath: HelperPaths.config) { BatteryConfig(enabled: false).writeJSON(to: HelperPaths.config) }
         // L'écriture atomique remplace le fichier : on surveille le dossier.
         let fd = open(HelperPaths.directory, O_EVTONLY)
         guard fd >= 0 else { return }
         let src = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: .write, queue: .main)
-        src.setEventHandler { BatteryDaemon.shared.evaluate() }
+        // Le dossier change aussi quand on écrit l'état : on ne réagit qu'à une config modifiée.
+        src.setEventHandler {
+            if BatteryDaemon.shared.reloadConfigIfChanged() { BatteryDaemon.shared.scheduleEvaluate() }
+        }
         src.setCancelHandler { close(fd) }
         src.resume()
         configSource = src

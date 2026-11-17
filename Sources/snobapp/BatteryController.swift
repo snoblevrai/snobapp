@@ -12,6 +12,7 @@ final class BatteryController {
     private(set) var nativeSupported = false
     private(set) var nativeSteps: [Int] = []
     private var lastConfig: BatteryConfig?
+    private var lastNativeTarget: (enabled: Bool, cap: Int)?
     var onStatusChange: [() -> Void] = []
 
     private init() {}
@@ -43,7 +44,7 @@ final class BatteryController {
     /// Le daemon a donné signe de vie récemment.
     var helperAlive: Bool {
         guard let s = status else { return false }
-        return Date().timeIntervalSince1970 - s.updated < 60
+        return Date().timeIntervalSince1970 - s.updated < 150   // signe de vie toutes les 60 s
     }
 
     func apply() {
@@ -52,13 +53,17 @@ final class BatteryController {
 
         // 1. Limite native (sans root). On ne la relève jamais à 100 % quand l'app quitte :
         //    elle doit rester active app fermée, Mac en veille ou service arrêté.
-        if nativeSupported {
-            if s.batteryLimitEnabled && cap < 100 {
+        // v6 : on n'interroge PowerUI (appels XPC vers powerd) que si la cible a changé,
+        // et non à chaque modification d'un réglage quelconque.
+        let nativeTarget = (enabled: s.batteryLimitEnabled && cap < 100, cap: cap)
+        if nativeSupported, lastNativeTarget.map({ $0 != nativeTarget }) ?? true {
+            if nativeTarget.enabled {
                 if CSNativeLimitGet() != cap { _ = CSNativeLimitSet(Int32(cap)) }
                 if !CSNativeLimitEnabled() { _ = CSNativeLimitSetEnabled(true) }
             } else if CSNativeLimitEnabled() {
                 _ = CSNativeLimitSetEnabled(false)
             }
+            lastNativeTarget = nativeTarget
         }
 
         // 2. Consignes du daemon.
@@ -73,10 +78,11 @@ final class BatteryController {
         }
     }
 
-    func forceApply() { lastConfig = nil; apply() }
+    func forceApply() { lastConfig = nil; lastNativeTarget = nil; HelperInstaller.invalidateCache(); apply() }
 
     func refreshStatus() {
-        if lastConfig == nil { apply() }   // dossier du service créé depuis (installation)
+        // Dossier du service apparu depuis (installation) : on lui envoie la configuration.
+        if lastConfig == nil, FileManager.default.isWritableFile(atPath: HelperPaths.directory) { apply() }
         status = BatteryStatus.readJSON(from: HelperPaths.status)
         // Décharge terminée par le daemon → on décoche le mode.
         if let st = status, Settings.shared.snapshot.dischargeMode,
@@ -111,10 +117,17 @@ enum HelperInstaller {
     }
 
     /// Le binaire installé diffère de celui de l'app (mise à jour nécessaire).
+    /// v6 : mis en cache — la fenêtre de réglages l'interrogeait chaque seconde, ce qui relisait
+    /// les deux binaires (~1 Mo chacun) en entier.
     static var isOutdated: Bool {
-        guard isInstalled, let exe = Bundle.main.executablePath else { return false }
-        return !FileManager.default.contentsEqual(atPath: exe, andPath: HelperPaths.binary)
+        if let cached = outdatedCache { return cached }
+        guard isInstalled, let exe = Bundle.main.executablePath else { outdatedCache = false; return false }
+        let v = !FileManager.default.contentsEqual(atPath: exe, andPath: HelperPaths.binary)
+        outdatedCache = v
+        return v
     }
+    private static var outdatedCache: Bool?
+    static func invalidateCache() { outdatedCache = nil }
 
     @discardableResult
     static func install() -> Bool {
@@ -157,6 +170,7 @@ enum HelperInstaller {
             "launchctl bootout system/\(HelperPaths.label) 2>/dev/null; true",
             "rm -f \(q(HelperPaths.plist)) \(q(HelperPaths.binary))",
         ].joined(separator: " ; ")
+        defer { invalidateCache() }
         return runAsAdmin(script)
     }
 
