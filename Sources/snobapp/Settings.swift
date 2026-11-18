@@ -21,6 +21,7 @@ enum Key {
     static let dischargeMode = "dischargeMode"
     static let dischargeRequestID = "dischargeRequestID"
     static let fullChargeMode = "fullChargeMode"            // v7.5
+    static let keepAwake = "keepAwake"                      // v7.6
     static let didImportV3Settings = "didImportV3Settings"
     // v5
     static let smoothScrollEnabled = "smoothScrollEnabled"
@@ -47,6 +48,7 @@ struct SettingsSnapshot {
     var batteryLimit: Int
     var dischargeMode: Bool
     var fullChargeMode: Bool
+    var keepAwake: Bool
     var smoothScrollEnabled: Bool
     var smoothness: Double
     var scrollSpeed: Double
@@ -75,6 +77,7 @@ final class Settings {
         Key.batteryLimit: 80,
         Key.dischargeMode: false,
         Key.fullChargeMode: false,
+        Key.keepAwake: false,
         Key.smoothScrollEnabled: true,
         Key.smoothness: 0.4,
         Key.scrollSpeed: 1.0,
@@ -129,6 +132,7 @@ final class Settings {
             batteryLimit: max(20, min(100, d.integer(forKey: Key.batteryLimit))),
             dischargeMode: d.bool(forKey: Key.dischargeMode),
             fullChargeMode: d.bool(forKey: Key.fullChargeMode),
+            keepAwake: d.bool(forKey: Key.keepAwake),
             smoothScrollEnabled: d.bool(forKey: Key.smoothScrollEnabled),
             smoothness: d.double(forKey: Key.smoothness),
             scrollSpeed: d.double(forKey: Key.scrollSpeed)

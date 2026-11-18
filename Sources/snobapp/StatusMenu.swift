@@ -67,6 +67,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(full)
 
         menu.addItem(.separator())
+        menu.addItem(toggle("Empêcher la veille (caffeinate)", s.keepAwake, Key.keepAwake))
         let login = action("Ouvrir au démarrage", #selector(toggleLogin))
         login.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(login)

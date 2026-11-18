@@ -2,9 +2,9 @@
 
 <h1 align="center">snobapp</h1>
 
-<p align="center">Une petite app de barre de menus macOS qui réunit quatre utilitaires en un seul.</p>
+<p align="center">Une petite app de barre de menus macOS qui réunit cinq utilitaires en un seul.</p>
 
-> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, speed and acceleration control and smooth scrolling, sleep on lid close even with external displays, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
+> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, speed and acceleration control and smooth scrolling, sleep on lid close even with external displays, a keep-awake (caffeinate) toggle, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
 
 ## Fonctions
 
@@ -13,6 +13,7 @@
 | **Clic du milieu au trackpad** | cliquer avec 3 doigts (réglable) = clic du milieu ; taper avec 3 doigts aussi. Apps ignorables. |
 | **Molette de la souris** | inversion verticale / horizontale, **vitesse réglable** (0,5× à 3×), **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS) et **défilement fluide** avec réglage de douceur. Le trackpad et la Magic Mouse ne sont jamais touchés ; sans souris externe branchée, la molette n'est pas du tout interceptée. |
 | **Veille capot fermé** | fermer le capot met le Mac en veille, même avec des écrans externes branchés. |
+| **Empêcher la veille** | case « Empêcher la veille (caffeinate) » dans le menu : comme `caffeinate -i`, le Mac reste éveillé (l'écran peut s'éteindre) ; mémorisée, relancée au démarrage. Fermer le capot met toujours en veille. |
 | **Limite de charge** | recharge max. (80–95 %, tenue par macOS sur secteur, rétablie automatiquement) **mode décharge** et **charge complète** dans le menu (se décochent seuls). |
 
 ## Installation
@@ -57,6 +58,7 @@ Signature ad hoc avec une exigence désignée stable (`identifier`) : l'autorisa
 | `EventTap.swift` | interception des clics et de la molette (deux taps, chacun actif seulement quand il sert), thread dédié |
 | `PointingDevices.swift` | détection d'une souris externe (registre IOKit) |
 | `LidSleep.swift` | veille à la fermeture du capot (`IOPMrootDomain`, `IOPMSleepSystem`) |
+| `KeepAwake.swift` | case « Empêcher la veille » (assertion `PreventUserIdleSystemSleep`, comme `caffeinate -i`) |
 | `BatteryController.swift` | limite native, installation du service |
 | `BatteryDaemon.swift` | service root : décharge et limite sous le palier natif |
 | `SystemMonitor.swift` | réveil, branchement de trackpad, écrans, app au premier plan |
