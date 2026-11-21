@@ -47,6 +47,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    /// snobapp://new-file?… envoyé par l'extension Finder « Nouveau fichier » (v9).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        urls.forEach(NewFile.handle)
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         EventTap.shared.stop()
         MiddleClickEngine.shared.stop()

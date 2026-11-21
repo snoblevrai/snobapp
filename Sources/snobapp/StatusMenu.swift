@@ -69,6 +69,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(toggle("Empêcher la veille (caffeinate)", s.keepAwake, Key.keepAwake))
         menu.addItem(toggle("Tracé de la souris", s.mouseTrailEnabled, Key.mouseTrailEnabled))
+        let newFile = action("« Nouveau fichier » dans le Finder", #selector(toggleNewFile))
+        newFile.state = NewFile.isEnabled ? .on : .off
+        menu.addItem(newFile)
         let login = action("Ouvrir au démarrage", #selector(toggleLogin))
         login.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(login)
@@ -164,6 +167,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     @objc private func toggleLogin() { LoginItem.set(!LoginItem.isEnabled) }
+    @objc private func toggleNewFile() { NewFile.setEnabled(!NewFile.isEnabled) }
     @objc private func openAccessibility() { Accessibility.prompt(); Accessibility.openSettings() }
     @objc private func showSettings() { openSettings() }
     @objc private func quit() { NSApp.terminate(nil) }

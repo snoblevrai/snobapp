@@ -2,9 +2,9 @@
 
 <h1 align="center">snobapp</h1>
 
-<p align="center">Une petite app de barre de menus macOS qui réunit six utilitaires en un seul.</p>
+<p align="center">Une petite app de barre de menus macOS qui réunit sept utilitaires en un seul.</p>
 
-> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, speed and acceleration control and smooth scrolling, sleep on lid close even with external displays, a keep-awake (caffeinate) toggle, a visible mouse trail with a custom color, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
+> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, speed and acceleration control and smooth scrolling, sleep on lid close even with external displays, a keep-awake (caffeinate) toggle, a visible mouse trail with a custom color, a Windows-style « New file » item in Finder's right-click menu, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
 
 ## Fonctions
 
@@ -15,6 +15,7 @@
 | **Veille capot fermé** | fermer le capot met le Mac en veille, même avec des écrans externes branchés. |
 | **Empêcher la veille** | case « Empêcher la veille (caffeinate) » dans le menu : comme `caffeinate -i`, le Mac reste éveillé (l'écran peut s'éteindre) ; mémorisée, relancée au démarrage. Fermer le capot met toujours en veille. |
 | **Tracé de la souris** | case « Tracé de la souris » dans le menu (et Réglages › Général) : une traînée suit le pointeur et s'estompe en ~0,6 s, sans gêner les clics, sur tous les écrans et Spaces. **Couleur réglable** dans Réglages › Général. Rien ne tourne quand elle est décochée. |
+| **Nouveau fichier (Finder)** | clic droit dans le vide d'une fenêtre du Finder ou sur le bureau › **Nouveau fichier › Document texte (.txt) / Markdown (.md)** : le fichier est créé (« Nouveau fichier.txt », numéroté s'il existe déjà), sélectionné et mis en renommage, comme sous Windows. Activable par la case du menu « Nouveau fichier » dans le Finder (ou Réglages Système › Général › Ouverture et extensions › Finder). |
 | **Limite de charge** | recharge max. (80–95 %, tenue par macOS sur secteur, rétablie automatiquement) **mode décharge** et **charge complète** dans le menu (se décochent seuls). |
 
 ## Installation
@@ -22,7 +23,8 @@
 1. Téléchargez `snobapp.zip` depuis les [Releases](../../releases), dézippez et placez `snobapp.app` dans `/Applications` (ou `~/Applications`).
 2. L'app n'est pas notariée : au premier lancement, clic droit › **Ouvrir** (ou `xattr -dr com.apple.quarantine snobapp.app`).
 3. Autorisez snobapp dans **Réglages Système › Confidentialité et sécurité › Accessibilité** (nécessaire pour le clic du milieu et la molette).
-4. Pour une limite de charge sous 80 % ou le mode décharge : **Réglages › Batterie › Installer…** (mot de passe administrateur, une seule fois).
+4. Au premier « Nouveau fichier », autorisez snobapp à contrôler le Finder (sélection et renommage du fichier créé).
+5. Pour une limite de charge sous 80 % ou le mode décharge : **Réglages › Batterie › Installer…** (mot de passe administrateur, une seule fois).
 
 ## Comment fonctionne la limite de charge
 
@@ -61,6 +63,8 @@ Signature ad hoc avec une exigence désignée stable (`identifier`) : l'autorisa
 | `LidSleep.swift` | veille à la fermeture du capot (`IOPMrootDomain`, `IOPMSleepSystem`) |
 | `KeepAwake.swift` | case « Empêcher la veille » (assertion `PreventUserIdleSystemSleep`, comme `caffeinate -i`) |
 | `MouseTrail.swift` | tracé de la souris : une fenêtre transparente par écran, qui ignore les clics ; traits vectoriels (`CAShapeLayer`) rendus par le serveur graphique, mis à jour à 60 Hz seulement pendant que le tracé s'estompe |
+| `Extensions/NewFile/` | extension Finder Sync (bac à sable) : sous-menu « Nouveau fichier » au clic droit, transmet `snobapp://new-file?dir=…&ext=…` à l'app ; compilée par `swiftc` dans `build.sh` (`PlugIns/NewFile.appex`) |
+| `NewFile.swift` | crée le fichier sans rien écraser, le sélectionne (AppleScript) et appuie sur Entrée dans le Finder ; ignore toute demande si le Finder n'est pas au premier plan |
 | `BatteryController.swift` | limite native, installation du service |
 | `BatteryDaemon.swift` | service root : décharge et limite sous le palier natif |
 | `SystemMonitor.swift` | réveil, branchement de trackpad, écrans, app au premier plan |
