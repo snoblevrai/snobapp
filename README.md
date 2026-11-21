@@ -2,9 +2,9 @@
 
 <h1 align="center">snobapp</h1>
 
-<p align="center">Une petite app de barre de menus macOS qui réunit cinq utilitaires en un seul.</p>
+<p align="center">Une petite app de barre de menus macOS qui réunit six utilitaires en un seul.</p>
 
-> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, speed and acceleration control and smooth scrolling, sleep on lid close even with external displays, a keep-awake (caffeinate) toggle, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
+> **English** — snobapp is a tiny macOS menu-bar app: three-finger middle click on the trackpad, mouse-wheel reverse, speed and acceleration control and smooth scrolling, sleep on lid close even with external displays, a keep-awake (caffeinate) toggle, a visible mouse trail with a custom color, and a battery charge limit with a discharge mode. Apple Silicon, macOS 13+ (charge limit: macOS 26.4+).
 
 ## Fonctions
 
@@ -14,6 +14,7 @@
 | **Molette de la souris** | inversion verticale / horizontale, **vitesse réglable** (0,5× à 3×), **accélération réglable** (0 % : chaque cran vaut un cran lent ; 100 % : courbe macOS) et **défilement fluide** avec réglage de douceur. Le trackpad et la Magic Mouse ne sont jamais touchés ; sans souris externe branchée, la molette n'est pas du tout interceptée. |
 | **Veille capot fermé** | fermer le capot met le Mac en veille, même avec des écrans externes branchés. |
 | **Empêcher la veille** | case « Empêcher la veille (caffeinate) » dans le menu : comme `caffeinate -i`, le Mac reste éveillé (l'écran peut s'éteindre) ; mémorisée, relancée au démarrage. Fermer le capot met toujours en veille. |
+| **Tracé de la souris** | case « Tracé de la souris » dans le menu (et Réglages › Général) : une traînée suit le pointeur et s'estompe en ~0,6 s, sans gêner les clics, sur tous les écrans et Spaces. **Couleur réglable** dans Réglages › Général. Rien ne tourne quand elle est décochée. |
 | **Limite de charge** | recharge max. (80–95 %, tenue par macOS sur secteur, rétablie automatiquement) **mode décharge** et **charge complète** dans le menu (se décochent seuls). |
 
 ## Installation
@@ -59,6 +60,7 @@ Signature ad hoc avec une exigence désignée stable (`identifier`) : l'autorisa
 | `PointingDevices.swift` | détection d'une souris externe (registre IOKit) |
 | `LidSleep.swift` | veille à la fermeture du capot (`IOPMrootDomain`, `IOPMSleepSystem`) |
 | `KeepAwake.swift` | case « Empêcher la veille » (assertion `PreventUserIdleSystemSleep`, comme `caffeinate -i`) |
+| `MouseTrail.swift` | tracé de la souris : une fenêtre transparente par écran, qui ignore les clics, redessinée à 60 Hz seulement pendant que le tracé s'estompe |
 | `BatteryController.swift` | limite native, installation du service |
 | `BatteryDaemon.swift` | service root : décharge et limite sous le palier natif |
 | `SystemMonitor.swift` | réveil, branchement de trackpad, écrans, app au premier plan |

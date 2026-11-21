@@ -68,6 +68,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(toggle("Empêcher la veille (caffeinate)", s.keepAwake, Key.keepAwake))
+        menu.addItem(toggle("Tracé de la souris", s.mouseTrailEnabled, Key.mouseTrailEnabled))
         let login = action("Ouvrir au démarrage", #selector(toggleLogin))
         login.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(login)

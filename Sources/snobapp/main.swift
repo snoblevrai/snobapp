@@ -28,6 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LidSleep.shared.start()
         KeepAwake.update()
         Settings.shared.onChange.append { KeepAwake.update() }
+        MouseTrail.shared.update()
+        Settings.shared.onChange.append { MouseTrail.shared.update() }
         BatteryController.shared.start()
         MiddleClickEngine.shared.start()
         PointingDevices.shared.start()

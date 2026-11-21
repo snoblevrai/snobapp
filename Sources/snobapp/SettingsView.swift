@@ -20,6 +20,8 @@ struct SettingsView: View {
     @AppStorage(Key.batteryLimitEnabled) private var batteryLimitEnabled = true
     @AppStorage(Key.batteryLimit) private var batteryLimit = 80
     @AppStorage(Key.dischargeMode) private var dischargeMode = false
+    @AppStorage(Key.mouseTrailEnabled) private var mouseTrailEnabled = false
+    @AppStorage(Key.mouseTrailColor) private var mouseTrailColor = "#FF3B30FF"
 
     // Les Command Line Tools n'embarquent pas le plugin de macros SwiftUI (@State) :
     // l'état local passe par un ObservableObject.
@@ -236,6 +238,15 @@ struct SettingsView: View {
                     get: { model.launchAtLogin },
                     set: { LoginItem.set($0); model.launchAtLogin = LoginItem.isEnabled }
                 ))
+            }
+            Section("Tracé de la souris") {
+                Toggle("Afficher un tracé derrière le pointeur", isOn: $mouseTrailEnabled)
+                ColorPicker("Couleur du tracé", selection: Binding(
+                    get: { Color(nsColor: NSColor(hex: mouseTrailColor) ?? .systemRed) },
+                    set: { mouseTrailColor = NSColor($0).hexString }
+                ))
+                Text("Le tracé suit le pointeur et s'estompe en une demi-seconde environ ; il ne gêne pas les clics.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             }
             .formStyle(.grouped)

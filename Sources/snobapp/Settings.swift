@@ -22,6 +22,8 @@ enum Key {
     static let dischargeRequestID = "dischargeRequestID"
     static let fullChargeMode = "fullChargeMode"            // v7.5
     static let keepAwake = "keepAwake"                      // v7.6
+    static let mouseTrailEnabled = "mouseTrailEnabled"      // v8
+    static let mouseTrailColor = "mouseTrailColor"          // v8 : « #RRGGBBAA »
     static let didImportV3Settings = "didImportV3Settings"
     // v5
     static let smoothScrollEnabled = "smoothScrollEnabled"
@@ -49,6 +51,8 @@ struct SettingsSnapshot {
     var dischargeMode: Bool
     var fullChargeMode: Bool
     var keepAwake: Bool
+    var mouseTrailEnabled: Bool
+    var mouseTrailColor: String
     var smoothScrollEnabled: Bool
     var smoothness: Double
     var scrollSpeed: Double
@@ -78,6 +82,8 @@ final class Settings {
         Key.dischargeMode: false,
         Key.fullChargeMode: false,
         Key.keepAwake: false,
+        Key.mouseTrailEnabled: false,
+        Key.mouseTrailColor: "#FF3B30FF",
         Key.smoothScrollEnabled: true,
         Key.smoothness: 0.4,
         Key.scrollSpeed: 1.0,
@@ -133,6 +139,8 @@ final class Settings {
             dischargeMode: d.bool(forKey: Key.dischargeMode),
             fullChargeMode: d.bool(forKey: Key.fullChargeMode),
             keepAwake: d.bool(forKey: Key.keepAwake),
+            mouseTrailEnabled: d.bool(forKey: Key.mouseTrailEnabled),
+            mouseTrailColor: d.string(forKey: Key.mouseTrailColor) ?? "#FF3B30FF",
             smoothScrollEnabled: d.bool(forKey: Key.smoothScrollEnabled),
             smoothness: d.double(forKey: Key.smoothness),
             scrollSpeed: d.double(forKey: Key.scrollSpeed)
