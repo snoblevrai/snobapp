@@ -60,7 +60,7 @@ Signature ad hoc avec une exigence désignée stable (`identifier`) : l'autorisa
 | `PointingDevices.swift` | détection d'une souris externe (registre IOKit) |
 | `LidSleep.swift` | veille à la fermeture du capot (`IOPMrootDomain`, `IOPMSleepSystem`) |
 | `KeepAwake.swift` | case « Empêcher la veille » (assertion `PreventUserIdleSystemSleep`, comme `caffeinate -i`) |
-| `MouseTrail.swift` | tracé de la souris : une fenêtre transparente par écran, qui ignore les clics, redessinée à 60 Hz seulement pendant que le tracé s'estompe |
+| `MouseTrail.swift` | tracé de la souris : une fenêtre transparente par écran, qui ignore les clics ; traits vectoriels (`CAShapeLayer`) rendus par le serveur graphique, mis à jour à 60 Hz seulement pendant que le tracé s'estompe |
 | `BatteryController.swift` | limite native, installation du service |
 | `BatteryDaemon.swift` | service root : décharge et limite sous le palier natif |
 | `SystemMonitor.swift` | réveil, branchement de trackpad, écrans, app au premier plan |
