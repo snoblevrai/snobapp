@@ -54,15 +54,26 @@ enum NewFile {
 
     // MARK: - Activation de l'extension (case du menu)
 
-    static var isEnabled: Bool { FIFinderSyncController.isExtensionEnabled }
+    /// `pluginkit -m` (~5 ms) : FIFinderSyncController.isExtensionEnabled renvoie toujours false
+    /// pour une extension signée ad hoc (vérifié sur macOS 27), et coûte 90 ms au premier appel.
+    static var isEnabled: Bool { pluginkit(["-m", "-i", extensionID])?.hasPrefix("+") == true }
 
     /// `pluginkit -e use|ignore` : même effet que la case dans Réglages Système › Extensions.
     static func setEnabled(_ on: Bool) {
-        let p = Process()
+        if pluginkit(["-e", on ? "use" : "ignore", "-i", extensionID]) == nil, on {
+            FIFinderSyncController.showExtensionManagementInterface()
+        }
+    }
+
+    /// Sortie de pluginkit, ou nil s'il échoue.
+    private static func pluginkit(_ args: [String]) -> String? {
+        let p = Process(), out = Pipe()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/pluginkit")
-        p.arguments = ["-e", on ? "use" : "ignore", "-i", extensionID]
-        try? p.run()
+        p.arguments = args
+        p.standardOutput = out
+        guard (try? p.run()) != nil else { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        if on && p.terminationStatus != 0 { FIFinderSyncController.showExtensionManagementInterface() }
+        return p.terminationStatus == 0 ? String(decoding: data, as: UTF8.self) : nil
     }
 }

@@ -150,6 +150,7 @@ if CommandLine.arguments.contains("--selftest") {
         let stepCount = CSNativeLimitAvailable(&steps, 16)
         print("Limite native: supportée=\(CSNativeLimitSupported()) paliers=\(steps.prefix(Int(stepCount))) actuelle=\(CSNativeLimitGet()) active=\(CSNativeLimitEnabled())")
         print("Batterie: \(BatteryDaemon.readBattery())")
+        print("Extension Finder « Nouveau fichier » activée : \(NewFile.isEnabled)")
         // Scénarios du daemon : (config, %, secteur, adaptateur coupé, décharge finie) → couper ?
         func cfg(_ limit: Int, cap: Int, discharge: Double = 0) -> BatteryConfig {
             BatteryConfig(enabled: true, limit: limit, nativeCap: cap, dischargeRequest: discharge)

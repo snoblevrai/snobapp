@@ -29,6 +29,7 @@ final class BatteryController {
         Settings.shared.onChange.append { BatteryController.shared.apply() }
         startNativeWatchdog()
         Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in BatteryController.shared.refreshStatus() }
+            .tolerance = 10   // réveil regroupé avec d'autres par macOS
         refreshStatus()
     }
 
